@@ -1,13 +1,16 @@
 # dsh-subagent-cursor
 
-[简体中文](README.md) | English
+[简体中文](README.md) | English (Chinese is authoritative; English may lag)
 
 [![npm version](https://img.shields.io/npm/v/dsh-subagent-cursor)](https://www.npmjs.com/package/dsh-subagent-cursor)
+[![License](https://img.shields.io/npm/l/dsh-subagent-cursor)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/NinjaSln-labs/dsh-subagent-cursor?style=social)](https://github.com/NinjaSln-labs/dsh-subagent-cursor)
 
-> English is a translation; [简体中文](README.md) is the authoritative document and may be newer.
+Cursor-as-subagent provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): one-shot local runs via `@cursor/sdk`, summary-first result presentation, unattended Profile Bundle.
 
-Cursor-as-subagent provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): one-shot local runs via `@cursor/sdk`, summary-first result presentation, unattended Profile Bundle. See [docs/DESIGN.md](./docs/DESIGN.md) and [docs/ROADMAP.md](./docs/ROADMAP.md).
+- **Subagent provider** — registers a provider on `ctx.subagents` (default name `cursor`); each run is a one-shot local `@cursor/sdk` query in the parent session cwd.
+- **Host-plane Profile Bundle** — same family as the official Claude Code / Codex providers; model-facing tools are provided by separate `dsh-tool-subagent` rows that name this provider.
+- **Summary-first results** — soft parsing with summary / `<details>` presentation, so the parent agent sees the conclusion at a glance.
 
 ## Install
 
@@ -17,7 +20,7 @@ dsh plugin add dsh-subagent-cursor
 
 This plugin registers a `ctx.subagents` provider (default name `cursor`). Each run is a one-shot local `@cursor/sdk` query in the parent session cwd. It is a host-plane Profile Bundle in the same family as the official Claude Code / Codex providers; model-facing tools are provided by separate `dsh-tool-subagent` rows that name this provider.
 
-## Minimal enablement
+### Minimal enablement
 
 ```yaml
 plugins:
@@ -45,6 +48,10 @@ Requires a real `CURSOR_API_KEY` (Cursor Dashboard → Integrations). Unit tests
 | `env` | `{}` | Explicit child/SDK environment layered over the credential-scrubbed parent env; supply `CURSOR_API_KEY` here |
 | `disposeGraceMs` | `3000` | Positive grace (ms) for teardown waits |
 
+## Why local one-shot
+
+Each delegation is an independent Cursor query in the parent session cwd — naturally isolated, never polluting the parent context. The SDK facade is injectable (`createAgent`); unit tests use a fake SDK, touch no network, and need no `CURSOR_API_KEY`.
+
 ## Development
 
 ```bash
@@ -55,6 +62,14 @@ npm test            # vitest: fake SDK contract coverage (completed / aborted / 
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Design
+
+Full design notes (module responsibilities, SDK contract, error classification, result format) live in [`docs/DESIGN.md`](docs/DESIGN.md); the roadmap is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## ⭐ Support
+
+If this plugin helps you, give it a ⭐ on the [GitHub repo](https://github.com/NinjaSln-labs/dsh-subagent-cursor) — it keeps me maintaining it. Issues / PRs are welcome too.
 
 ## License
 
