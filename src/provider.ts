@@ -23,6 +23,8 @@ export type CursorStartRunner = (
 
 export class CursorProvider implements SubagentProvider {
   readonly capabilities: SubagentCapabilities = {
+    // Cursor one-shot runs don't consume per-call provider/model overrides.
+    agentOptions: false,
     outputSchema: false,
     depthLimit: false,
     toolFilter: false,
