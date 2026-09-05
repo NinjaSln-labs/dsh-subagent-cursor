@@ -39,6 +39,12 @@ export interface CursorSubagentConfig {
    * True by default so a fresh install can delegate right away.
    */
   autoPermissions?: boolean
+  /**
+   * When a cli delegation result carries a permission-denied trace, ask the
+   * user (host answerer popup) whether to grant the common commands and retry.
+   * Default false — enable explicitly if you want the interactive bridge.
+   */
+  askOnBlocked?: boolean
 }
 
 export const name = 'dsh-subagent-cursor'
@@ -54,6 +60,7 @@ export const defaultConfig = {
   timeoutMs: 600_000,
   disposeGraceMs: 3000,
   autoPermissions: true,
+  askOnBlocked: false,
 } satisfies Required<CursorSubagentConfig>
 
 export function resolveConfig(config: CursorSubagentConfig = {}): Required<CursorSubagentConfig> {
@@ -66,6 +73,7 @@ export function resolveConfig(config: CursorSubagentConfig = {}): Required<Curso
     timeoutMs: config.timeoutMs ?? defaultConfig.timeoutMs,
     disposeGraceMs: config.disposeGraceMs ?? defaultConfig.disposeGraceMs,
     autoPermissions: config.autoPermissions ?? defaultConfig.autoPermissions,
+    askOnBlocked: config.askOnBlocked ?? defaultConfig.askOnBlocked,
   }
 }
 

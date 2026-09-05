@@ -42,6 +42,14 @@ export type CursorRunDeps = {
   readonly configuredCwd?: string
   /** Extra env layered over the credential-scrubbed parent env. */
   readonly env?: Record<string, string>
+  /**
+   * Called when a cli result carries a permission-denied trace (e.g. a tool
+   * call that was rejected by the Cursor allowlist). Receives the raw result
+   * text and returns text to show instead — typically prompts the user for an
+   * authorization decision via the host answerer, grants the permission, and
+   * tells the caller to retry. Absent → the raw (blocked) text is shown.
+   */
+  readonly onBlocked?: (blockedText: string) => Promise<string>
   readonly onError?: (error: Error, stopReason: SubagentStopReason) => void
 }
 
@@ -123,6 +131,15 @@ function mapCliResult(result: CliResult): SubagentResult {
     output: textOutput(`${line}\n${result.detail}`),
     stopReason: 'error',
   }
+}
+
+/**
+ * Heuristic: does a finished cli result carry a permission-denied trace that
+ * an authorization bridge could resolve? Looks for Cursor's rejection wording
+ * in the raw text (kept conservative to avoid false positives).
+ */
+export function looksBlocked(text: string): boolean {
+  return /\[blocked\]|was rejected|Rejected:|tool call rejected/i.test(text)
 }
 
 async function disposeCursorAgent(
@@ -226,7 +243,21 @@ export async function startCursorRun(
     activeCliRun = cliRun
 
     const result = settleRunResult({
-      attempt: async () => mapCliResult(await cliRun.wait()),
+      attempt: async () => {
+        const cliResult = await cliRun.wait()
+        const mapped = mapCliResult(cliResult)
+        // 权限被拒 → 授权桥（若配置）介入：弹窗征询并可能加白名单
+        if (
+          mapped.stopReason === 'completed'
+          && cliResult.kind === 'finished'
+          && deps.onBlocked !== undefined
+          && looksBlocked(cliResult.text)
+        ) {
+          const replacement = await deps.onBlocked(formatForParent(parseResultText(cliResult.text), 'Cursor 委派结果'))
+          return { output: textOutput(replacement), stopReason: 'completed' as const }
+        }
+        return mapped
+      },
       collectOutput: () => [],
       cancelled: () => controller.signal.aborted,
       onError: deps.onError,

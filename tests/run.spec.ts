@@ -255,3 +255,52 @@ describe('startCursorRun readiness gate', () => {
     ).rejects.toThrow(/找不到 cursor-agent CLI/)
   })
 })
+
+describe('looksBlocked + authorization bridge', () => {
+  it('detects rejection wording', async () => {
+    const { looksBlocked } = await import('../src/run.ts')
+    expect(looksBlocked('The whoami command was rejected [blocked]')).toBe(true)
+    expect(looksBlocked('Rejected: Shell(whoami)')).toBe(true)
+    expect(looksBlocked('All done fine')).toBe(false)
+  })
+  it('calls onBlocked when a finished cli result carries a rejection and replaces output', async () => {
+    const { startCursorRun } = await import('../src/run.ts')
+    const onBlocked = async (text: string) => `${text}\n\n已放行常用命令，请重试。`
+    const run = await startCursorRun(fakeRequest({ prompt: 'x' }), {
+      ...baseDeps,
+      driver: 'cli',
+      apiKey: '',
+      createRun: async () => ({
+        sessionId: 'b1',
+        wait: async () => ({ kind: 'finished', text: 'whoami was rejected [blocked]', sessionId: 'b1' }),
+        cancel: async () => {},
+        supports: () => true,
+      }),
+      onBlocked,
+    })
+    const result = await run.result
+    const text = String((result.output[0] as { text: string }).text)
+    expect(text).toContain('已放行常用命令，请重试')
+    await run.dispose()
+  })
+  it('does not call onBlocked on a clean result', async () => {
+    const { startCursorRun } = await import('../src/run.ts')
+    const onBlocked = async (text: string) => `${text}\n\nSHOULD-NOT-APPEAR`
+    const run = await startCursorRun(fakeRequest({ prompt: 'x' }), {
+      ...baseDeps,
+      driver: 'cli',
+      apiKey: '',
+      createRun: async () => ({
+        sessionId: 'b2',
+        wait: async () => ({ kind: 'finished', text: '<summary>clean ok</summary><status>ok</status><body>fine</body>', sessionId: 'b2' }),
+        cancel: async () => {},
+        supports: () => true,
+      }),
+      onBlocked,
+    })
+    const result = await run.result
+    const text = String((result.output[0] as { text: string }).text)
+    expect(text).not.toContain('SHOULD-NOT-APPEAR')
+    await run.dispose()
+  })
+})
