@@ -108,3 +108,49 @@ describe('CursorProvider.start', () => {
     })
   })
 })
+
+describe('CursorProvider authorization bridge assembly', () => {
+  it('assembles onBlocked into deps when askOnBlocked is enabled', async () => {
+    const { CursorProvider } = await import('../src/provider.ts')
+    const { resolveConfig } = await import('../src/index.ts')
+    const published = {
+      id: 'r1' as SubagentRun['id'], localAgent: undefined,
+      result: Promise.resolve({ output: [], stopReason: 'completed' as const }),
+      dispose: async () => {},
+    }
+    let capturedDeps: CursorRunDeps | undefined
+    const startRun = async (_r: unknown, deps: CursorRunDeps) => { capturedDeps = deps; return published }
+    const ctx = {
+      get: () => undefined, // userQuestions 不可用 → keep 文案
+      logger: { info: () => {}, warn: () => {} },
+      subagents: { registerProvider: () => {} },
+    }
+    const provider = new CursorProvider(
+      'cursor', ctx as never, resolveConfig({ driver: 'cli', askOnBlocked: true }), startRun as never,
+    )
+    const req = fakeResolvedRequest(process.cwd())
+    await provider.start(req as never)
+    expect(capturedDeps?.onBlocked).toBeDefined()
+    const out = await capturedDeps!.onBlocked!('whoami was rejected [blocked]', ['whoami'])
+    expect(out).toContain('whoami was rejected') // keep() 保留原文
+    expect(capturedDeps?.onBlocked).toBeDefined()
+  })
+  it('does not assemble onBlocked when askOnBlocked is off', async () => {
+    const { CursorProvider } = await import('../src/provider.ts')
+    const { resolveConfig } = await import('../src/index.ts')
+    const published = {
+      id: 'r1' as SubagentRun['id'], localAgent: undefined,
+      result: Promise.resolve({ output: [], stopReason: 'completed' as const }),
+      dispose: async () => {},
+    }
+    let capturedDeps: CursorRunDeps | undefined
+    const startRun = async (_r: unknown, deps: CursorRunDeps) => { capturedDeps = deps; return published }
+    const provider = new CursorProvider(
+      'cursor',
+      { get: () => undefined, logger: { info: () => {}, warn: () => {} }, subagents: {} } as never,
+      resolveConfig({ driver: 'cli', askOnBlocked: false }), startRun as never,
+    )
+    await provider.start(fakeResolvedRequest(process.cwd()) as never)
+    expect(capturedDeps?.onBlocked).toBeUndefined()
+  })
+})

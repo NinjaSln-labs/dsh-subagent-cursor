@@ -14,6 +14,7 @@ import type {
 import type { CursorSubagentConfig } from './index.ts'
 import { startCursorRun, type CursorRunDeps } from './run.ts'
 import { grantPermissions } from './cli-permissions.ts'
+import { appendFileSync } from 'node:fs'
 
 type Resolved = Required<CursorSubagentConfig>
 
@@ -66,12 +67,18 @@ export class CursorProvider implements SubagentProvider {
     rejected: readonly string[] | undefined,
     request: ResolvedSubagentStartRequest,
   ): Promise<string> {
+    const diag = (msg: string) => {
+      try { appendFileSync('/tmp/cursor-authbridge-diag.log', `${Date.now()} ${msg}\n`) } catch { /* noop */ }
+    }
+    diag(`authorizeBlocked 被调 rejected=${JSON.stringify(rejected)}`)
     const keep = () => `${blockedText}\n\n（Cursor 权限不足导致部分操作被拒。）`
     const answerer = this.ctx.get('userQuestions')
     if (answerer === undefined) {
+      diag('userQuestions unavailable')
       this.ctx.logger?.warn?.('dsh-subagent-cursor: userQuestions service unavailable; skipping auth bridge')
       return keep()
     }
+    diag('userQuestions available')
     try {
       const deniedCommands = (rejected ?? []).filter((c) => c.length > 0)
       const deniedDetail = deniedCommands.length > 0
