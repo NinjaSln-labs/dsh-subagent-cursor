@@ -13,7 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-subagent'
 import type { CursorSubagentConfig } from './index.ts'
 import { startCursorRun, type CursorRunDeps } from './run.ts'
-import { ensureGlobalPermissions } from './cli-permissions.ts'
+import { grantPermissions } from './cli-permissions.ts'
 
 type Resolved = Required<CursorSubagentConfig>
 
@@ -60,7 +60,7 @@ export class CursorProvider implements SubagentProvider {
     return this.startRun(request, deps)
   }
 
-  /** 弹宿主问题窗，把被拒命令授权进 Cursor allowlist（或让用户拒绝）。 */
+  /** 弹宿主问题窗，把被拒命令授权进 Cursor allowlist（或让用户拒绝/自定义）。 */
   private async authorizeBlocked(
     blockedText: string,
     rejected: readonly string[] | undefined,
@@ -73,32 +73,49 @@ export class CursorProvider implements SubagentProvider {
       return keep()
     }
     try {
-      const deniedDetail = rejected && rejected.length > 0
-        ? rejected.map((cmd) => `  - ${cmd}`).join('\n')
-        : blockedText.split('\n', 1)[0]
+      const deniedCommands = (rejected ?? []).filter((c) => c.length > 0)
+      const deniedDetail = deniedCommands.length > 0
+        ? deniedCommands.map((cmd) => `  ${cmd}`).join('\n')
+        : `  ${blockedText.split('\n', 1)[0]}`
       // ask 需要发起委派的 exact-live agent（request.parent）才能弹给人
       const answer = await answerer.ask({
         questions: [
           {
             id: 'cursor-permission',
             header: 'Cursor 权限授权',
-            question: `Cursor 子代理有命令被权限策略拒绝：\n${deniedDetail}\n\n是否放行常用命令？`,
+            question: `Cursor 子代理要用的命令被权限策略拒绝：\n${deniedDetail}\n\n如何处置？`,
             options: [
-              { label: '放行常用命令（推荐）', description: '把缺的常用权限加入 Cursor 白名单，重试本委派即可。' },
-              { label: '本次拒绝', description: '保留原样，仅报告被拒结果。' },
+              deniedCommands.length > 0
+                ? { label: `授权这 ${deniedCommands.length} 条命令`, description: `加入 Cursor 白名单后重试本委派。` }
+                : { label: '授权放行', description: '把命令加入 Cursor 白名单后重试本委派。' },
+              { label: '拒绝', description: '保留原样，仅报告被拒结果。' },
+              { label: '自定义', description: '自己指定要放行的命令（选此项并在输入框填写，如 Shell(ping)，多条约逗号/换行分隔）。' },
             ],
           },
         ],
         agent: request.parent,
       })
-      const selected = answer.answers?.[0]?.selected ?? []
-      if (selected.includes('放行常用命令（推荐）')) {
-        const out = ensureGlobalPermissions()
-        const addedCount = out.kind === 'merged' ? (out.added ?? []).length : 0
-        const note = out.kind === 'unchanged' ? '（白名单已是最新）' : `（已补 ${addedCount} 项）`
-        return `${blockedText}\n\n已放行常用命令${note}，请重试本委派。`
+      const selected: string[] = answer.answers?.[0]?.selected ?? []
+      const custom: string = answer.answers?.[0]?.custom?.trim() ?? ''
+      let grants: string[] = []
+      if (selected.includes('授权放行') || selected.some((s: string) => s.startsWith('授权这'))) {
+        // 精确放行被拒命令（Shell(<cmd>) 粒度）
+        grants = deniedCommands.length > 0
+          ? deniedCommands.map((cmd: string) => `Shell(${cmd.split(/\s+/, 1)[0]})`)
+          : []
+      } else if (selected.includes('自定义') && custom.length > 0) {
+        // 用户自填：兼容 Shell(...) 形式与裸命令名
+        grants = custom.split(/[\n,;]/).map((s: string) => s.trim()).filter(Boolean).map((item: string) =>
+          /^Shell\(/.test(item) || /^Read\(/.test(item) || /^Write\(/.test(item) || /^WebFetch\(/.test(item)
+            ? item
+            : `Shell(${item.split(/\s+/, 1)[0]})`,
+        )
+      } else {
+        return blockedText // 拒绝或不识别 → 原样
       }
-      return blockedText
+      if (grants.length === 0) return blockedText
+      const out = grantPermissions(grants)
+      return `${blockedText}\n\n已授权 ${grants.length} 条命令${out.added > 0 ? `（新增 ${out.added} 条）` : '（均已存在）'}，请重试本委派。`
     } catch (error) {
       this.ctx.logger?.warn?.(
         `dsh-subagent-cursor: auth bridge ask failed (${error instanceof Error ? error.message : String(error)})`,

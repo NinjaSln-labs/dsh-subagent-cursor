@@ -96,6 +96,44 @@ export const DEFAULT_PERMISSION_PLAN: PermissionPlan = {
   ],
 }
 
+/**
+ * Append explicit permission entries (e.g. `Shell(whoami)`) to the global
+ * Cursor CLI allowlist, preserving everything else. Returns how many were
+ * actually added (entries already present are not duplicated).
+ */
+export function grantPermissions(entries: readonly string[]): { added: number } {
+  const filePath = globalCliConfigPath()
+  const existing = readPermissions(filePath)
+  if (existing === null) {
+    // 无配置文件 → 用默认集 + 追加的条目一次性创建
+    const dedupe = new Set([...DEFAULT_PERMISSION_PLAN.allow])
+    for (const entry of entries) dedupe.add(entry)
+    const config = {
+      version: 1,
+      permissions: {
+        allow: [...dedupe],
+        deny: [...DEFAULT_PERMISSION_PLAN.deny],
+      },
+    }
+    writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+    return { added: entries.length }
+  }
+  const existingAllow = new Set(existing.allow)
+  const toAdd = entries.filter((entry) => !existingAllow.has(entry))
+  if (toAdd.length === 0) return { added: 0 }
+  try {
+    copyFileSync(filePath, `${filePath}.bak-${Date.now()}`)
+  } catch {
+    // 备份失败不阻断
+  }
+  const config = JSON.parse(readFileSync(filePath, 'utf8')) as Record<string, unknown>
+  const permissions = (config.permissions ?? {}) as { allow?: string[]; deny?: string[] }
+  permissions.allow = [...(permissions.allow ?? []), ...toAdd]
+  config.permissions = permissions
+  writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+  return { added: toAdd.length }
+}
+
 /** 读取一个 Cursor CLI 配置的 permissions 段（宽松容错：损坏视为空）。 */
 export function readPermissions(filePath: string): { allow: string[]; deny: string[] } | null {
   if (!existsSync(filePath)) return null

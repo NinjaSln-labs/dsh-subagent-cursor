@@ -71,3 +71,18 @@ describe('DEFAULT_PERMISSION_PLAN common read-only commands', () => {
     }
   })
 })
+
+describe('grantPermissions', () => {
+  it('appends explicit entries to an existing config and reports added count', async () => {
+    const { ensureGlobalPermissions, grantPermissions } = await import('../src/cli-permissions.ts')
+    ensureGlobalPermissions()
+    const file = join(fakeHome, '.cursor', 'cli-config.json')
+    const out = grantPermissions(['Shell(ping)', 'Shell(whoami)'])
+    expect(out.added).toBe(2)
+    const parsed = JSON.parse(readFileSync(file, 'utf8'))
+    expect(parsed.permissions.allow).toContain('Shell(ping)')
+    expect(parsed.permissions.allow).toContain('Shell(whoami)')
+    // 二次授权已存在的 → added 0
+    expect(grantPermissions(['Shell(ping)']).added).toBe(0)
+  })
+})
