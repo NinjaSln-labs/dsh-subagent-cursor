@@ -23,6 +23,9 @@ import { createSdkAgent, type CreateSdkAgent, type SdkAgent, type SdkRunHandle }
 
 const PREFIX = 'dsh-subagent-cursor'
 
+/** 授权后自动重发同一任务的最大次数（防授权失败死循环）。 */
+const MAX_CLI_RETRY = 2
+
 /** Which backend executes the one-shot run. */
 export type CursorDriver = 'cli' | 'sdk'
 
@@ -44,12 +47,16 @@ export type CursorRunDeps = {
   readonly env?: Record<string, string>
   /**
    * Called when a cli result carries a permission-denied trace (a tool call
-   * rejected by the Cursor allowlist). Receives the raw result text plus any
-   * rejected commands extracted from the stream, and returns text to show
-   * instead — typically prompts the user via the host answerer, grants the
-   * permission, and tells the caller to retry. Absent → the raw text is shown.
+   * rejected by the Cursor allowlist). Receives the raw result text, any
+   * rejected commands, and a `retry` handle that re-runs the same delegation
+   * once the caller has granted the missing permissions. Return the final text
+   * to show. Absent → the raw text is shown.
    */
-  readonly onBlocked?: (blockedText: string, rejected?: readonly string[]) => Promise<string>
+  readonly onBlocked?: (
+    blockedText: string,
+    rejected: readonly string[] | undefined,
+    retry: () => Promise<string>,
+  ) => Promise<string>
   readonly onError?: (error: Error, stopReason: SubagentStopReason) => void
 }
 
@@ -227,36 +234,58 @@ export async function startCursorRun(
     }
     // spawn failures are post-publication settle material for CLI (no agent
     // object to dispose): publish immediately, let wait() surface the error.
-    const cliRun = await createRun({
-      prompt,
-      model: deps.model,
-      cwd,
-      signal: request.signal,
-      cliPath: deps.cliPath,
-      timeoutMs: deps.timeoutMs,
-      env: deps.env,
-    })
-    if (controller.signal.aborted || request.signal.aborted) {
-      await cliRun.cancel().catch(() => {})
-      throw new Error(`${PREFIX}: request was aborted before startup`)
+    let firstCliSessionId = ''
+    const createRunInstance = async () => {
+      const instance = await createRun({
+        prompt,
+        model: deps.model,
+        cwd,
+        signal: request.signal,
+        cliPath: deps.cliPath,
+        timeoutMs: deps.timeoutMs,
+        env: deps.env,
+      })
+      if (firstCliSessionId === '') firstCliSessionId = instance.sessionId
+      activeCliRun = instance // 让 abort/cancel 能作用到当前运行
+      if (controller.signal.aborted || request.signal.aborted) {
+        await instance.cancel().catch(() => {})
+        throw new Error(`${PREFIX}: request was aborted before startup`)
+      }
+      return instance
     }
-    activeCliRun = cliRun
+
+    // 单次 cli 跑 + blocked 处理（授权后自动重发，最多重试 MAX_CLI_RETRY 次）
+    const runCliOnce = async (attemptNo: number): Promise<CliResult> => {
+      const instance = await createRunInstance()
+      const cliResult = await instance.wait()
+      const hasRejection = cliResult.kind === 'finished'
+        && ((cliResult.rejected?.length ?? 0) > 0 || looksBlocked(cliResult.text))
+      if (cliResult.kind === 'finished' && hasRejection && deps.onBlocked !== undefined) {
+        if (attemptNo >= MAX_CLI_RETRY) {
+          return { kind: 'finished', text: cliResult.text, sessionId: cliResult.sessionId, rejected: cliResult.rejected }
+        }
+        // 授权桥处理；授权后 retry 递归重发，返回下一轮最终文本
+        const retry = async (): Promise<string> => {
+          const next = await runCliOnce(attemptNo + 1)
+          const mapped = mapCliResult(next)
+          return mapped.output.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('')
+        }
+        return deps.onBlocked(
+          formatForParent(parseResultText(cliResult.text), 'Cursor 委派结果'),
+          cliResult.rejected,
+          retry,
+        ).then(
+          (replacement) => ({ kind: 'finished', text: replacement, sessionId: cliResult.sessionId }),
+          () => ({ kind: 'finished', text: cliResult.text, sessionId: cliResult.sessionId }),
+        )
+      }
+      return cliResult
+    }
 
     const result = settleRunResult({
       attempt: async () => {
-        const cliResult = await cliRun.wait()
-        const mapped = mapCliResult(cliResult)
-        // 权限被拒（结构化 rejected 信号优先，文本启发兜底）→ 授权桥（若配置）介入
-        const hasRejection = cliResult.kind === 'finished'
-          && ((cliResult.rejected?.length ?? 0) > 0 || looksBlocked(cliResult.text))
-        if (mapped.stopReason === 'completed' && hasRejection && deps.onBlocked !== undefined) {
-          const replacement = await deps.onBlocked(
-            formatForParent(parseResultText(cliResult.text), 'Cursor 委派结果'),
-            cliResult.kind === 'finished' ? cliResult.rejected : undefined,
-          )
-          return { output: textOutput(replacement), stopReason: 'completed' as const }
-        }
-        return mapped
+        const cliResult = await runCliOnce(0)
+        return mapCliResult(cliResult)
       },
       collectOutput: () => [],
       cancelled: () => controller.signal.aborted,
@@ -266,7 +295,8 @@ export async function startCursorRun(
     })
 
     return subprocessRunHandle({
-      id: SessionId(cliRun.sessionId.length > 0 ? cliRun.sessionId : randomUUID()),
+      // run id 用首次运行 sessionId（若有）；异步重发不改变身份
+      id: SessionId(firstCliSessionId.length > 0 ? firstCliSessionId : randomUUID()),
       result,
       signal: request.signal,
       onAbort,

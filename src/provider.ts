@@ -56,10 +56,10 @@ export class CursorProvider implements SubagentProvider {
       cliPath: this.config.cliPath,
       timeoutMs: this.config.timeoutMs,
       env: this.config.env,
-      // 兜底授权：运行中被拒 → 宿主弹窗征询（依赖上面的 onBlocked 组装）
+      // 兜底授权：运行中被拒 → 宿主弹窗征询 → 授权后自动重发（retry 由 run.ts 提供）
       ...(bridgeEnabled
-        ? { onBlocked: (blockedText: string, rejected?: readonly string[]) =>
-            this.authorizeBlocked(blockedText, rejected, request) }
+        ? { onBlocked: (blockedText: string, rejected: readonly string[] | undefined, retry: () => Promise<string>) =>
+            this.authorizeBlocked(blockedText, rejected, request, retry) }
         : {}),
     }
     return this.startRun(request, deps)
@@ -97,11 +97,12 @@ export class CursorProvider implements SubagentProvider {
     }
   }
 
-  /** 弹宿主问题窗，把被拒命令授权进 Cursor allowlist（或让用户拒绝/自定义）。 */
+  /** 弹宿主问题窗，把被拒命令授权进 Cursor allowlist；授权后自动重发同任务。 */
   private async authorizeBlocked(
     blockedText: string,
     rejected: readonly string[] | undefined,
     request: ResolvedSubagentStartRequest,
+    retry: () => Promise<string>,
   ): Promise<string> {
     const log = (msg: string) => this.ctx.logger?.info?.(`dsh-subagent-cursor: ${msg}`)
     log(`authorizeBlocked rejected=${JSON.stringify(rejected ?? [])}`)
@@ -127,7 +128,7 @@ export class CursorProvider implements SubagentProvider {
             header: 'Cursor 权限授权',
             question: `Cursor 子代理要用的命令被权限策略拒绝：\n${deniedDetail}\n\n如何处置？`,
             options: [
-              { label: '授权', description: '把上述命令加入 Cursor 白名单，重试本委派即可。' },
+              { label: '授权', description: '放行上述命令并自动继续本任务。' },
               { label: '拒绝', description: '保留原样，仅报告被拒结果。' },
               { label: '自定义', description: '自己指定要放行的命令（选此项并在输入框填写，如 ping，多条约逗号/换行分隔）。' },
             ],
@@ -138,7 +139,7 @@ export class CursorProvider implements SubagentProvider {
       const selected: string[] = answer.answers?.[0]?.selected ?? []
       const custom: string = answer.answers?.[0]?.custom?.trim() ?? ''
       let grants: string[] = []
-      if (selected.includes('授权')) {
+      if (selected.includes('授权') || selected.some((s: string) => s.includes('授权'))) {
         // 精确放行被拒命令名（Shell(<命令名>) 粒度）
         grants = deniedNames.length > 0
           ? deniedNames.map((name: string) => `Shell(${name})`)
@@ -155,7 +156,14 @@ export class CursorProvider implements SubagentProvider {
       }
       if (grants.length === 0) return blockedText
       const out = grantPermissions(grants)
-      return `${blockedText}\n\n已授权 ${grants.length} 条命令${out.added > 0 ? `（新增 ${out.added} 条）` : '（均已存在）'}，请重试本委派。`
+      log(`granted ${out.added} entries; auto-retrying the delegation`)
+      // 授权成功 → 自动重发同任务（不从头提示用户手动重试）
+      try {
+        return await retry()
+      } catch (retryError) {
+        log(`auto-retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)}`)
+        return `${blockedText}\n\n已授权 ${grants.length} 条命令（新增 ${out.added} 条），但自动重试未完成，可再发一次。`
+      }
     } catch (error) {
       this.ctx.logger?.warn?.(
         `dsh-subagent-cursor: auth bridge ask failed (${error instanceof Error ? error.message : String(error)})`,

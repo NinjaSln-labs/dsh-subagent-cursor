@@ -174,7 +174,7 @@ describe('startCursorRun', () => {
     const result = await run.result
     expect(result.stopReason).toBe('completed')
     expect(String((result.output[0] as { text: string }).text)).toContain('cli ok')
-    expect(run.id).toBe('cli-session-1')
+    expect(typeof run.id).toBe('string') // run id 由宿主分配（lazy；不等 cli session）
     await run.dispose()
   })
 
@@ -301,6 +301,41 @@ describe('looksBlocked + authorization bridge', () => {
     const result = await run.result
     const text = String((result.output[0] as { text: string }).text)
     expect(text).not.toContain('SHOULD-NOT-APPEAR')
+    await run.dispose()
+  })
+})
+
+describe('cli auto-retry after grant', () => {
+  it('re-runs the same task when onBlocked grants and calls retry', async () => {
+    const { startCursorRun } = await import('../src/run.ts')
+    let calls = 0
+    const createRun = async () => {
+      calls += 1
+      const first = calls === 1
+      return {
+        sessionId: first ? 'run-a' : 'run-b',
+        wait: async () => first
+          ? { kind: 'finished' as const, text: 'whoami was rejected [blocked]', sessionId: 'run-a' }
+          : { kind: 'finished' as const, text: '<summary>now ok</summary><status>ok</status><body>done</body>', sessionId: 'run-b' },
+        cancel: async () => {},
+        supports: () => true,
+      }
+    }
+    const onBlocked = async (_text: string, _rejected: readonly string[] | undefined, retry: () => Promise<string>) => {
+      return retry() // 授权后自动重发
+    }
+    const run = await startCursorRun(fakeRequest({ prompt: 'x' }), {
+      ...baseDeps,
+      driver: 'cli',
+      apiKey: '',
+      createRun,
+      onBlocked,
+    })
+    const result = await run.result
+    expect(calls).toBe(2) // 首跑被拒 + 授权后重发
+    const text = String((result.output[0] as { text: string }).text)
+    expect(text).toContain('now ok')
+    expect(text).toContain('Cursor 委派结果')
     await run.dispose()
   })
 })

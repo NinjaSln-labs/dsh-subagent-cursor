@@ -131,7 +131,9 @@ describe('CursorProvider authorization bridge assembly', () => {
     const req = fakeResolvedRequest(process.cwd())
     await provider.start(req as never)
     expect(capturedDeps?.onBlocked).toBeDefined()
-    const out = await capturedDeps!.onBlocked!('whoami was rejected [blocked]', ['whoami'])
+    // userQuestions 不可用 → keep() 保留原文，retry 不被调
+    const retry = async () => 'RETRY-RESULT'
+    const out = await capturedDeps!.onBlocked!('whoami was rejected [blocked]', ['whoami'], retry)
     expect(out).toContain('whoami was rejected') // keep() 保留原文
     expect(capturedDeps?.onBlocked).toBeDefined()
   })
