@@ -81,3 +81,12 @@ describe('formatForParent strips stray HTML', () => {
     expect(out).toContain('> x')
   })
 })
+
+describe('formatForParent marker idempotency', () => {
+  it('does not double the marker when summary already carries it', () => {
+    const parsed = { summary: 'Cursor 委派结果：done ok', status: 'ok' as const, body: '', structured: true }
+    const out = formatForParent(parsed, 'Cursor 委派结果')
+    expect(out).toBe('Cursor 委派结果：done ok [ok]')
+    expect(out.match(/Cursor 委派结果/g)?.length).toBe(1)
+  })
+})

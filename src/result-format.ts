@@ -61,7 +61,10 @@ export function formatForParent(parsed: ParsedResult, marker?: string): string {
   const detail = cleanedBody.length === 0 || cleanedBody === cleanedSummary
     ? ''
     : `\n\n${quoteLines(cleanedBody)}`
-  const head = marker === undefined ? '' : `${marker}：`
+  // 幂等：summary 已带该 marker 前缀（自动重发/递归路径）则不重复加
+  const head = marker !== undefined && !cleanedSummary.startsWith(`${marker}：`)
+    ? `${marker}：`
+    : ''
   return `${head}${cleanedSummary}${status}${detail}`
 }
 

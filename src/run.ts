@@ -267,11 +267,10 @@ export async function startCursorRun(
         if (attemptNo >= MAX_CLI_RETRY) {
           return { kind: 'finished', text: cliResult.text, sessionId: cliResult.sessionId, rejected: cliResult.rejected }
         }
-        // 授权桥处理；授权后 retry 递归重发，返回下一轮最终文本
+        // 授权桥处理；授权后 retry 递归重发，返回下一轮**原始**文本（外层 attempt 统一 map 一次）
         const retry = async (): Promise<string> => {
           const next = await runCliOnce(attemptNo + 1)
-          const mapped = mapCliResult(next)
-          return mapped.output.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('')
+          return next.kind === 'finished' ? next.text : next.detail
         }
         return deps.onBlocked(
           formatForParent(parseResultText(cliResult.text), 'Cursor 委派结果'),
