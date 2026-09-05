@@ -19,7 +19,7 @@ export interface CursorSubagentConfig {
   providerName?: string
   /** Execution backend: `cli` (local login state, default) or `sdk` (needs CURSOR_API_KEY). */
   driver?: CursorDriver
-  /** Cursor model id passed to the driver (default pinned in resolveConfig). */
+  /** Cursor model id passed to the driver (`auto` = driver-side auto selection). */
   model?: string
   /**
    * Explicit child/driver environment layered over a credential-scrubbed parent
@@ -41,7 +41,7 @@ export const inject = ['subagents']
 export const defaultConfig = {
   providerName: 'cursor',
   driver: 'cli' as CursorDriver,
-  model: 'composer-2.5',
+  model: 'auto',
   env: {},
   cliPath: 'cursor-agent',
   timeoutMs: 600_000,

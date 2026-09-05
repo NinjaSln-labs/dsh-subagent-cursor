@@ -45,7 +45,7 @@ Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-age
 |---|---|---|
 | `providerName` | `cursor` | Provider name registered on `ctx.subagents` |
 | `driver` | `cli` | Execution backend: `cli` (local login state) or `sdk` (`@cursor/sdk` + key) |
-| `model` | `composer-2.5` | Cursor model id passed to the driver (`auto` works for the cli driver) |
+| `model` | `auto` | Cursor model id passed to the driver; `auto` lets the CLI pick |
 | `env` | `{}` | Explicit environment layered over the credential-scrubbed parent env; supply `CURSOR_API_KEY` here for `driver: sdk` |
 | `cliPath` | `cursor-agent` | CLI executable path (`driver: cli`) |
 | `timeoutMs` | `600000` | Hard wall-clock limit per run (ms, `driver: cli`) |

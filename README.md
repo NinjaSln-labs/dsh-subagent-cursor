@@ -30,7 +30,7 @@ plugins:
   - package: dsh-subagent-cursor
     config:
       providerName: cursor
-      # model: composer-2.5          # 可选；cli 驱动默认 auto
+      # model: auto                   # 可选；默认 auto（CLI 侧自动选模型）
       # cliPath: cursor-agent        # 可选；默认从 PATH 解析 cursor-agent
       # driver: cli                  # 默认 cli（登录态，无 Key）；sdk 需要 CURSOR_API_KEY
   - package: dsh-tool-subagent
@@ -48,7 +48,7 @@ plugins:
 |---|---|---|
 | `providerName` | `cursor` | 注册到 `ctx.subagents` 上的提供方名 |
 | `driver` | `cli` | 执行后端：`cli`（本机登录态）或 `sdk`（`@cursor/sdk` + Key） |
-| `model` | `composer-2.5` | 传给驱动的 Cursor 模型 id（cli 驱动可传 `auto`） |
+| `model` | `auto` | 传给驱动的 Cursor 模型 id；`auto` = CLI 侧自动选模型 |
 | `env` | `{}` | 叠加在凭据清洗后的父 env 之上的显式环境；`driver: sdk` 时在此提供 `CURSOR_API_KEY` |
 | `cliPath` | `cursor-agent` | CLI 可执行文件路径（`driver: cli`） |
 | `timeoutMs` | `600000` | 单次运行硬墙钟上限（ms，`driver: cli`） |

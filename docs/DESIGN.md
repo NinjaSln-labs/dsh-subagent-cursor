@@ -51,7 +51,7 @@ DSH 父代理需要把仓库内编码任务委派给 **Cursor 子代理**。官�
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `providerName` | `cursor` | `ctx.subagents` 注册名 |
-| `model` | `composer-2.5` | SDK model id |
+| `model` | `auto` | Driver model id |
 | `env.CURSOR_API_KEY` | （空） | 缺则 `start` 在 publication 前 reject（`query-start/auth`） |
 | `disposeGraceMs` | `3000` | 保留的 teardown 时序参数（正有限数） |
 

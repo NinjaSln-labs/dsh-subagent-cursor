@@ -53,7 +53,7 @@ describe('CursorProvider.start', () => {
       'cursor',
       fakeCtx(),
       resolveConfig({
-        model: 'composer-2.5',
+        model: 'auto',
         env: { CURSOR_API_KEY: 'from-env' },
         disposeGraceMs: 1500,
       }),
@@ -66,7 +66,7 @@ describe('CursorProvider.start', () => {
     expect(capturedRequest).toBe(request)
     expect(capturedDeps).toMatchObject({
       apiKey: 'from-env',
-      model: 'composer-2.5',
+      model: 'auto',
       disposeGraceMs: 1500,
     })
   })

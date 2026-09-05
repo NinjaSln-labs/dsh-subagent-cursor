@@ -45,7 +45,7 @@ function fakeAgent(partial: Partial<SdkAgent> & Pick<SdkAgent, 'send'>): SdkAgen
 const baseDeps = {
   driver: 'sdk' as const,
   apiKey: 'test-key',
-  model: 'composer-2.5',
+  model: 'auto',
   disposeGraceMs: 100,
   cliPath: 'cursor-agent',
   timeoutMs: 60_000,
