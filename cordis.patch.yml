@@ -1,6 +1,19 @@
-# dsh-subagent-cursor bundle layer: registers the dormant `cursor`
-# SubagentProvider (Profile Bundle). Model-facing tools are separate
-# `dsh-tool-subagent` rows that name this provider.
+# dsh-subagent-cursor bundle layer: registers the `cursor` SubagentProvider
+# (Profile Bundle) AND its model-facing tool row — the provider itself is
+# dormant (registers on ctx.subagents only); model-visible tools are separate
+# `dsh-tool-subagent` rows. This bundle ships the correct tool row so users
+# don't hand-write it:
+#   - maxDepth: 'provider-managed' — REQUIRED. Cursor is an out-of-process
+#     provider with capabilities.depthLimit=false; a numeric maxDepth (tool
+#     default 3) fails mount loud ("provider cannot enforce maxDepth").
+#   - no backgroundMode — Cursor runs are one-shot; `continuable` is NOT
+#     supported and fails mount loud.
 - insert:
     - id: subagent-cursor
       name: 'dsh-subagent-cursor'
+    - id: tool-subagent-cursor
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: cursor
+        toolName: subagent_cursor
+        maxDepth: provider-managed

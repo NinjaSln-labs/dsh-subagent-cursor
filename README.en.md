@@ -23,18 +23,28 @@ This plugin registers a `ctx.subagents` provider (default name `cursor`). Each r
 
 ### Minimal enablement
 
+The plugin's **bundle ships the correct tool row** (`tool-subagent-cursor`: `provider: cursor` / `toolName: subagent_cursor` / `maxDepth: provider-managed`); mount the package in the profile bundle list and you're done — **no hand-written tool row needed**:
+
+```yaml
+# profile package.json → dsh.profile.bundles (or mount the package in your plugins list)
+- package: dsh-subagent-cursor
+```
+
+**To customize the tool name / override config**, hand-writing a `dsh-tool-subagent` row must obey two hard contracts (violating either fails the mount):
+
 ```yaml
 plugins:
   - package: dsh-subagent-cursor
     config:
       providerName: cursor
       # driver: cli                  # default; uses local CLI login, no key
-      # cliPath: cursor-agent        # optional; resolved from PATH by default
   - package: dsh-tool-subagent
     config:
-      tools:
-        - name: subagent_cursor
-          provider: cursor
+      provider: cursor
+      toolName: subagent_cursor
+      maxDepth: provider-managed     # REQUIRED! cursor is out-of-process (depthLimit=false)
+                                     # a numeric maxDepth (default 3) fails mount: provider cannot enforce maxDepth
+      # DO NOT set backgroundMode: continuable — Cursor runs are one-shot; continuable is unsupported
 ```
 
 Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-agent login`) and no API key. `driver: sdk` requires `CURSOR_API_KEY` (Cursor Dashboard → API Keys). Unit tests use fake drivers and need neither.

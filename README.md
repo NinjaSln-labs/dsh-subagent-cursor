@@ -23,7 +23,14 @@ dsh plugin add dsh-subagent-cursor
 
 ### 最小启用
 
-在 Profile Bundle / 部署配置中挂上本包，并暴露 tool-subagent 行（工具名可自定）：
+本插件的 **bundle 自带正确的工具行**（`tool-subagent-cursor`：`provider: cursor` / `toolName: subagent_cursor` / `maxDepth: provider-managed`），在 Profile Bundle / 部署配置的 bundles 清单挂上本包即可，**无需手写工具行**：
+
+```yaml
+# profile package.json → dsh.profile.bundles（或在 plugins 清单挂包）
+- package: dsh-subagent-cursor
+```
+
+**若要自定义工具名 / 覆盖配置**，手写 `dsh-tool-subagent` 行时必须遵守两个硬契约（违反任一都会挂载即崩）：
 
 ```yaml
 plugins:
@@ -35,9 +42,11 @@ plugins:
       # driver: cli                  # 默认 cli（登录态，无 Key）；sdk 需要 CURSOR_API_KEY
   - package: dsh-tool-subagent
     config:
-      tools:
-        - name: subagent_cursor
-          provider: cursor
+      provider: cursor
+      toolName: subagent_cursor
+      maxDepth: provider-managed     # 必须！cursor 是 out-of-process provider（depthLimit=false）
+                                     # 数字 maxDepth（默认 3）会挂载失败：provider cannot enforce maxDepth
+      # 禁止设置 backgroundMode: continuable —— Cursor 运行是一次性 one-shot，不支持 continuable
 ```
 
 默认 `driver: cli` 要求本机已安装并登录 `cursor-agent` CLI（`cursor-agent login`），不需要 API Key。`driver: sdk` 需要 `CURSOR_API_KEY`（Cursor Dashboard → API Keys）。单测用 fake 驱动，不触网、两者都不依赖。
