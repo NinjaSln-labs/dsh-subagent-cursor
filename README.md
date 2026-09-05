@@ -51,6 +51,10 @@ plugins:
 
 默认 `driver: cli` 要求本机已安装并登录 `cursor-agent` CLI（`cursor-agent login`），不需要 API Key。`driver: sdk` 需要 `CURSOR_API_KEY`（Cursor Dashboard → API Keys）。单测用 fake 驱动，不触网、两者都不依赖。
 
+> **就绪检测**：每次委派前插件自动检查 CLI 是否已安装且已登录（调用 `cursor-agent status` 解析其输出，**不读取你的凭据**）。未安装或未登录时返回带修复指引的明确错误，而非黑盒失败：
+> - 未安装：`找不到 cursor-agent CLI … 安装：curl https://cursor.com/install -fsS | bash`（或配置 `cliPath`）
+> - 未登录：`cursor-agent 未登录 … 登录：cursor-agent login`
+
 ## 配置
 
 | 字段 | 默认 | 含义 |

@@ -15,7 +15,7 @@ import {
   type SubagentStopReason,
 } from '@deepseek-ai/dsh-subagent'
 import type { RunResult } from '@cursor/sdk'
-import { createCliRun, type CliResult, type CliRunHandle, type CreateCliRun } from './cli-driver.ts'
+import { createCliRun, checkCliReady, type CliReadiness, type CliResult, type CliRunHandle, type CreateCliRun } from './cli-driver.ts'
 import { classifySdkError, formatDiagnostic, type FailureStage } from './failure.ts'
 import { wrapTaskPrompt } from './prompt.ts'
 import { formatForParent, parseResultText } from './result-format.ts'
@@ -65,6 +65,25 @@ export function textTask(prompt: readonly ContentBlock[]): string {
 
 function textOutput(text: string): ContentBlock[] {
   return [{ type: 'text', text }]
+}
+
+/** 用户可读的就绪失败指引（缺装 vs 未登录，附修复命令）。 */
+export function cliReadinessMessage(readiness: CliReadiness): string {
+  if ('reason' in readiness && readiness.ready === false) {
+    if (readiness.reason === 'missing') {
+      return [
+        `${PREFIX}: 找不到 cursor-agent CLI（查找路径: ${readiness.detail}）。`,
+        '安装：curl https://cursor.com/install -fsS | bash   # 装到 ~/.local/bin',
+        '或配置 cliPath 指向你的 cursor-agent 可执行文件。',
+      ].join('\n')
+    }
+    return [
+      `${PREFIX}: cursor-agent 未登录（${readiness.detail}）。`,
+      '登录：cursor-agent login   # 浏览器授权一次即可',
+      '然后重试本委派。',
+    ].join('\n')
+  }
+  return ''
 }
 
 function mapRunResult(run: RunResult): SubagentResult {
@@ -181,6 +200,14 @@ export async function startCursorRun(
 
   if (deps.driver === 'cli') {
     const createRun = deps.createRun ?? createCliRun
+    if (deps.createRun === undefined) {
+      // 就绪检测（缺装 / 未登录 → 抛带可操作指引的错，避免黑盒失败）。
+      // 仅对生产默认 createRun 执行；注入 createRun（测试/宿主替换）时信任注入者跳过。
+      const readiness = await checkCliReady(deps.cliPath)
+      if (!readiness.ready) {
+        throw new Error(cliReadinessMessage(readiness))
+      }
+    }
     // spawn failures are post-publication settle material for CLI (no agent
     // object to dispose): publish immediately, let wait() surface the error.
     const cliRun = await createRun({

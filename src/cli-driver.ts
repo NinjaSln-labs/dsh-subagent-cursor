@@ -90,6 +90,71 @@ export function resolveCliPath(cliPath: string): string {
   return cliPath // spawn will surface ENOENT with the original configured name
 }
 
+export type CliReadiness =
+  | { readonly ready: true; readonly account: string }
+  | { readonly ready: false; readonly reason: 'missing' | 'not-logged-in'; readonly detail: string }
+
+/**
+ * Check the Cursor CLI is installed AND logged in — without touching user
+ * credentials. Delegates to the CLI's own `status` subcommand, which reads its
+ * own auth store; we only parse its stdout (`✓ Logged in as …` / `Not logged in`).
+ * A missing binary is detected via spawn ENOENT.
+ */
+export function checkCliReady(cliPath: string, timeoutMs = 10_000): Promise<CliReadiness> {
+  const resolvedPath = resolveCliPath(cliPath)
+  return new Promise((resolve) => {
+    let child: ReturnType<typeof spawn> | undefined
+    try {
+      child = spawn(resolvedPath, ['status'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        env: process.env,
+      })
+    } catch (error) {
+      resolve({
+        ready: false,
+        reason: 'missing',
+        detail: `无法启动 cursor-agent（${error instanceof Error ? error.message : String(error)}）`,
+      })
+      return
+    }
+    let stdout = ''
+    let settled = false
+    const finish = (out: CliReadiness) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(out)
+    }
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') {
+        finish({ ready: false, reason: 'missing', detail: resolvedPath })
+      } else {
+        finish({ ready: false, reason: 'missing', detail: `${resolvedPath}: ${error.message}` })
+      }
+    })
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (chunk: string) => {
+      stdout += chunk
+    })
+    child.on('close', () => {
+      const text = stdout.trim()
+      // 「✓ Logged in as …」→ 已登录；「Not logged in」→ 未登录（注意 Not 前缀）
+      const notLoggedIn = /not\s+logged\s+in/i.test(text)
+      const loggedIn = !notLoggedIn && /logged\s+in/i.test(text)
+      const accountMatch = /logged\s+in\s+as\s+(.+)/i.exec(text)
+      if (loggedIn) {
+        finish({ ready: true, account: accountMatch?.[1]?.trim() ?? 'unknown' })
+      } else {
+        finish({ ready: false, reason: 'not-logged-in', detail: text || '(无输出)' })
+      }
+    })
+    const timer = setTimeout(() => {
+      child?.kill('SIGKILL')
+      finish({ ready: false, reason: 'not-logged-in', detail: 'cursor-agent status 超时' })
+    }, timeoutMs)
+  })
+}
+
 /** Production factory: spawn the CLI in print mode, stream-parse stdout. */
 export const createCliRun: CreateCliRun = async (options) => {
   const resolvedPath = resolveCliPath(options.cliPath)

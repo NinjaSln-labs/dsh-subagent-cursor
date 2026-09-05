@@ -222,3 +222,35 @@ describe('startCursorRun', () => {
     await run.dispose()
   })
 })
+
+describe('cliReadinessMessage', () => {
+  it('guides install when the CLI is missing', async () => {
+    const { cliReadinessMessage } = await import('../src/run.ts')
+    const msg = cliReadinessMessage(
+      { ready: false, reason: 'missing', detail: 'cursor-agent' },
+    )
+    expect(msg).toContain('找不到 cursor-agent CLI')
+    expect(msg).toContain('curl https://cursor.com/install')
+  })
+  it('guides login when not logged in', async () => {
+    const { cliReadinessMessage } = await import('../src/run.ts')
+    const msg = cliReadinessMessage(
+      { ready: false, reason: 'not-logged-in', detail: 'Not logged in' },
+    )
+    expect(msg).toContain('未登录')
+    expect(msg).toContain('cursor-agent login')
+  })
+})
+
+describe('startCursorRun readiness gate', () => {
+  it('driver=cli without injected createRun runs checkCliReady and guides on missing CLI', async () => {
+    await expect(
+      startCursorRun(fakeRequest({ prompt: 'x' }), {
+        ...baseDeps,
+        driver: 'cli',
+        apiKey: '',
+        cliPath: '/nonexistent/cursor-agent-readiness-probe',
+      }),
+    ).rejects.toThrow(/找不到 cursor-agent CLI/)
+  })
+})

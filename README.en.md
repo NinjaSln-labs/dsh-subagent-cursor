@@ -49,6 +49,10 @@ plugins:
 
 Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-agent login`) and no API key. `driver: sdk` requires `CURSOR_API_KEY` (Cursor Dashboard → API Keys). Unit tests use fake drivers and need neither.
 
+> **Readiness check**: before each delegation the plugin checks the CLI is installed and logged in (runs `cursor-agent status` and parses its output — **your credentials are never read**). Missing install or login returns an explicit error with fix guidance instead of a black-box failure:
+> - Not installed: `cursor-agent CLI not found … install: curl https://cursor.com/install -fsS | bash` (or set `cliPath`)
+> - Not logged in: `cursor-agent not logged in … login: cursor-agent login`
+
 ## Configuration
 
 | Field | Default | Meaning |
