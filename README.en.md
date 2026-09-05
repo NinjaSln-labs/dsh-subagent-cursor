@@ -8,7 +8,7 @@
 
 Cursor-as-subagent provider for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): one-shot local Cursor runs, summary-first result presentation, unattended Profile Bundle.
 
-- **Subagent provider** — registers a provider on `ctx.subagents` (default name `cursor`); each run is a one-shot local Cursor query in the parent session cwd.
+- **Subagent provider** — registers a provider on `ctx.subagents` (default name `cursor`); each run is a one-shot local Cursor task in the parent session cwd: the child has full agent tools (read/write files, shell, web — bounded by the Cursor permission set) and completes one self-contained task before returning.
 - **Dual driver** — default `driver: cli` spawns the local `cursor-agent -p` using its login state, **no `CURSOR_API_KEY` needed**; optional `driver: sdk` uses `@cursor/sdk` (requires a key).
 - **Host-plane Profile Bundle** — same family as the official Claude Code / Codex providers; model-facing tools are provided by separate `dsh-tool-subagent` rows that name this provider.
 - **Summary-first results** — soft parsing with summary / `<details>` presentation, so the parent agent sees the conclusion at a glance.
@@ -19,7 +19,7 @@ Cursor-as-subagent provider for [DeepSeek Harness](https://github.com/deepseek-a
 dsh plugin add dsh-subagent-cursor
 ```
 
-This plugin registers a `ctx.subagents` provider (default name `cursor`). Each run is a one-shot local Cursor query in the parent session cwd. It is a host-plane Profile Bundle in the same family as the official Claude Code / Codex providers; model-facing tools are provided by separate `dsh-tool-subagent` rows that name this provider.
+This plugin registers a `ctx.subagents` provider (default name `cursor`). Each run is a one-shot local Cursor task execution in the parent session cwd — the child completes one self-contained task with full agent tools (read/write, shell, web, bounded by the Cursor permission set) and leaves no resumable session. It is a host-plane Profile Bundle in the same family as the official Claude Code / Codex providers; model-facing tools are provided by separate `dsh-tool-subagent` rows that name this provider.
 
 ### Minimal enablement
 
@@ -70,7 +70,7 @@ Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-age
 
 ## Why local one-shot
 
-Each delegation is an independent Cursor query in the parent session cwd — naturally isolated, never polluting the parent context. Both driver facades are injectable (`createRun` / `createAgent`); unit tests use fakes, touch no network, and need no `CURSOR_API_KEY`.
+Each delegation is an independent Cursor task execution in the parent session cwd — naturally isolated, never polluting the parent context. The child has full tools (read/write files, shell, web, bounded by the permission set), completes its task in one session, then is cleaned up. Both driver facades are injectable (`createRun` / `createAgent`); unit tests use fakes, touch no network, and need no `CURSOR_API_KEY`.
 
 ## Development
 

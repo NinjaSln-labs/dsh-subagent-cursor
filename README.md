@@ -6,12 +6,12 @@
 [![License](https://img.shields.io/npm/l/dsh-subagent-cursor)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/NinjaSln-labs/dsh-subagent-cursor?style=social)](https://github.com/NinjaSln-labs/dsh-subagent-cursor)
 
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Cursor-as-subagent 提供方插件：一次本地 one-shot Cursor 查询、摘要优先的结果展示、可无人值守的 Profile Bundle。
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Cursor-as-subagent 提供方插件：一次本地 one-shot Cursor 任务执行、摘要优先的结果展示、可无人值守的 Profile Bundle。
 
-- **Subagent 提供方** — 向 `ctx.subagents` 注册一个提供方（默认名 `cursor`），每次运行是一次父会话 cwd 下的本地 one-shot Cursor 查询。
+- **Subagent 提供方** — 向 `ctx.subagents` 注册一个提供方（默认名 `cursor`），每次运行是一次父会话 cwd 下的本地 one-shot Cursor 任务：子代理带完整 agent 工具（读/写文件、跑 shell、取 web 文档等，边界由权限集决定），独立完成一次性任务后返回。
 - **双驱动** — 默认 `driver: cli`：spawn 本机 `cursor-agent -p`，复用 CLI 登录态，**无需 `CURSOR_API_KEY`**；可选 `driver: sdk`：走 `@cursor/sdk`（需要 Key）。
 - **宿主平面 Profile Bundle** — 与官方 Claude Code / Codex 提供方同族；对模型可见的工具由独立的 `dsh-tool-subagent` 行提供并指定本提供方。
-- **摘要优先结果** — 软解析 + summary / `<details>` 呈现，父代理一眼看到结论。
+- **摘要优先结果** — 软解析 + summary / 证据呈现，父代理一眼看到结论。
 
 ## 安装
 
@@ -19,7 +19,7 @@
 dsh plugin add dsh-subagent-cursor
 ```
 
-本插件注册一个 `ctx.subagents` 提供方（默认名 `cursor`）。每次运行是一次父会话 cwd 下的本地 one-shot Cursor 查询。属于 host 平面的 Profile Bundle，与官方 Claude Code / Codex 提供方同族；对模型可见的工具由独立的 `dsh-tool-subagent` 行提供并指定本提供方。
+本插件注册一个 `ctx.subagents` 提供方（默认名 `cursor`）。每次运行是一次父会话 cwd 下的本地 one-shot Cursor 任务执行——子代理独立完成一次性任务（读/写文件、shell、网络等，受 Cursor 权限集约束）后返回，不保留可续会话。属于 host 平面的 Profile Bundle，与官方 Claude Code / Codex 提供方同族；对模型可见的工具由独立的 `dsh-tool-subagent` 行提供并指定本提供方。
 
 ### 最小启用
 
@@ -72,7 +72,7 @@ plugins:
 
 ## 为什么用本地 one-shot
 
-每次委派都是父会话 cwd 下的独立 Cursor 查询，天然隔离、不污染父上下文；CLI / SDK 驱动门面均可注入（`createRun` / `createAgent`），单测用 fake 驱动，不触网、无需 `CURSOR_API_KEY`。
+每次委派都是父会话 cwd 下的独立 Cursor 任务执行，天然隔离、不污染父上下文——子代理带完整工具（读写文件 / shell / 网络，权限集界定边界），在一次性会话里完成任务后即清理。CLI / SDK 驱动门面均可注入（`createRun` / `createAgent`），单测用 fake 驱动，不触网、无需 `CURSOR_API_KEY`。
 
 ## 开发
 
