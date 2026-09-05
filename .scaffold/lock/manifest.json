@@ -1,0 +1,14 @@
+# NEVER EDIT MANUALLY——scaffold 状态层（手改会欺骗三方合并算法）
+{
+  "template": "scaffold/dsh-plugin",
+  "adopt": false,
+  "at": "2026-09-05T12:46:31.981Z",
+  "files": {
+    ".github/copilot-instructions.md": "ca41af108135c647809030076ea8596873cda3ad1133baac26726cc2278c7653",
+    ".github/workflows/ci.yml": "0ec1685a09d5944774ab6ff17deb9943dc494e862c9bf834befcc5a91edc6afe",
+    "CLAUDE.md": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+    "scripts/build.mjs": "90e438a3764af0be28d3c97bbfb5659fd47a3715a528ae859c901bae9c0acbb3",
+    "scripts/verify.mjs": "92a4a6aa65f45ddf9070025b93d9f70fd23ab0ac59a227b20df4d4f9d8602e52",
+    "src/config.ts": "2451d506b9054f4e2f8df0132df0556b960629a8010fa306ada393452ce90263"
+  }
+}
