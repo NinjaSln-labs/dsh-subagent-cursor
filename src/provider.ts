@@ -17,6 +17,11 @@ import { grantPermissions, missingDefaultPermissions } from './cli-permissions.t
 
 type Resolved = Required<CursorSubagentConfig>
 
+/** 取文本首词（自动授权兜底：无结构化被拒时从描述猜命令名）。 */
+function firstToken(text: string): string {
+  return (text.trim().split(/\s+/, 1)[0] ?? '').replace(/[^\w.-]/g, '')
+}
+
 export type CursorStartRunner = (
   request: SubagentStartRequest,
   deps: CursorRunDeps,
@@ -101,6 +106,23 @@ export class CursorProvider implements SubagentProvider {
     }
   }
 
+  /** DSH 用户当前权限预设是否处于「免问/自动放行」模式（approval=never）。 */
+  private isAutoGrantSession(request: ResolvedSubagentStartRequest): boolean {
+    try {
+      const presets = this.ctx.get('permissionPresets')
+      const sessions = this.ctx.get('sessions')
+      if (presets === undefined || sessions === undefined) return false
+      const session = sessions.get(request.parent.id)
+      if (session === undefined) return false
+      const presetName = presets.current(session)
+      if (typeof presetName !== 'string' || presetName === 'custom') return false
+      const spec = presets.resolve(presetName)
+      return spec?.approval === 'never'
+    } catch {
+      return false // 判定失败 → 走弹窗（保守）
+    }
+  }
+
   /** 弹宿主问题窗，把被拒命令授权进 Cursor allowlist；授权后自动重发同任务。 */
   private async authorizeBlocked(
     blockedText: string,
@@ -111,6 +133,27 @@ export class CursorProvider implements SubagentProvider {
     const log = (msg: string) => this.ctx.logger?.info?.(`dsh-subagent-cursor: ${msg}`)
     log(`authorizeBlocked rejected=${JSON.stringify(rejected ?? [])}`)
     const keep = () => `${blockedText}\n\n（Cursor 权限不足导致部分操作被拒。）`
+    const autoGrant = this.isAutoGrantSession(request)
+    log(`auto-grant (DSH approval=never): ${autoGrant}`)
+    // 命令清单（自动授权或弹窗都基于它）
+    const deniedCommands = (rejected ?? []).filter((c) => c.length > 0)
+    const deniedNames = deniedCommands.map((cmd: string) => cmd.split(/\s+/, 1)[0] ?? cmd)
+    const grantsFor = (names: readonly string[]) => names.map((n: string) => `Shell(${n})`)
+
+    if (autoGrant) {
+      // DSH 用户处于免问模式 → 静默放行被拒命令 + 自动重发，不弹窗
+      const grants = grantsFor(deniedNames.length > 0 ? deniedNames : [firstToken(blockedText)])
+      if (grants.length === 0) return blockedText
+      const out = grantPermissions(grants)
+      log(`auto-granted ${out.added} entries; auto-retrying`)
+      try {
+        return await retry()
+      } catch (retryError) {
+        log(`auto-retry failed: ${retryError instanceof Error ? retryError.message : String(retryError)}`)
+        return `${blockedText}\n\n已自动放行 ${grants.length} 条命令，但重试未完成，可再发一次。`
+      }
+    }
+
     const answerer = this.ctx.get('userQuestions')
     if (answerer === undefined) {
       log('userQuestions unavailable; skipping auth bridge')
@@ -118,9 +161,6 @@ export class CursorProvider implements SubagentProvider {
     }
     log('auth bridge ready')
     try {
-      // 只取命令名展示（不含参数/完整命令行）；授权粒度 = Shell(<命令名>)
-      const deniedCommands = (rejected ?? []).filter((c) => c.length > 0)
-      const deniedNames = deniedCommands.map((cmd: string) => cmd.split(/\s+/, 1)[0] ?? cmd)
       const deniedDetail = deniedNames.length > 0
         ? deniedNames.map((name: string) => `  ${name}`).join('\n')
         : `  ${blockedText.split('\n', 1)[0]}`

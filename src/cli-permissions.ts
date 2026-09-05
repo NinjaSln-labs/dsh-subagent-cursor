@@ -115,6 +115,7 @@ export function grantPermissions(entries: readonly string[]): { added: number } 
         deny: [...DEFAULT_PERMISSION_PLAN.deny],
       },
     }
+    mkdirSync(dirname(filePath), { recursive: true })
     writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
     return { added: entries.length }
   }

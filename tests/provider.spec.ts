@@ -160,3 +160,60 @@ describe('CursorProvider authorization bridge assembly', () => {
     }
   })
 })
+
+describe('CursorProvider DSH-level auto-grant', () => {
+  it('auto-grants and retries without asking when the DSH preset is approval=never', async () => {
+    // HOME 隔离：grantPermissions 写临时 HOME 的 cli-config，避免污染真实配置
+    const os = await import('node:os')
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const oldHome = process.env.HOME
+    process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cursor-autogrant-'))
+    try {
+      // 先建好默认权限，使 preflight（缺≥5才问）不触发
+      const perms = await import('../src/cli-permissions.ts')
+      perms.ensureGlobalPermissions()
+      const { CursorProvider } = await import('../src/provider.ts')
+      const { resolveConfig } = await import('../src/index.ts')
+      const asked = { count: 0 }
+      const ctx = {
+        get: (name: string) => {
+          if (name === 'permissionPresets') return {
+            current: () => 'loose',
+            resolve: () => ({ sandbox: 'danger-full-access', approval: 'never', name: 'loose' }),
+          }
+          if (name === 'sessions') return { get: () => ({ id: 's1' }) }
+          if (name === 'userQuestions') return {
+            ask: async () => {
+              asked.count += 1
+              // preflight 会问「补齐」→ 返回跳过；授权桥（本用例不该触发）→ 抛
+              return { answers: [{ id: 'cursor-permissions-baseline', selected: ['跳过'] }] }
+            },
+          }
+          return undefined
+        },
+        logger: { info: () => {}, warn: () => {} },
+        subagents: {},
+      }
+      const published = {
+        id: 'r1' as SubagentRun['id'], localAgent: undefined,
+        result: Promise.resolve({ output: [], stopReason: 'completed' as const }),
+        dispose: async () => {},
+      }
+      let capturedDeps: CursorRunDeps | undefined
+      const startRun = async (_r: unknown, deps: CursorRunDeps) => { capturedDeps = deps; return published }
+      const provider = new CursorProvider('cursor', ctx as never,
+        resolveConfig({ driver: 'cli', approvalLevel: 'balanced' }), startRun as never)
+      const req = fakeResolvedRequest(process.cwd()) as never
+      await provider.start(req)
+      expect(capturedDeps?.onBlocked).toBeDefined()
+      let retried = false
+      const out = await capturedDeps!.onBlocked!('whoami blocked', ['whoami'], async () => { retried = true; return 'RETRY-OK' })
+      expect(asked.count).toBe(0) // 不弹窗
+      expect(retried).toBe(true)  // 自动重发
+      expect(out).toBe('RETRY-OK')
+    } finally {
+      process.env.HOME = oldHome
+    }
+  })
+})
