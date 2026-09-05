@@ -43,9 +43,13 @@ export class CursorProvider implements SubagentProvider {
     void this.ctx
     const apiKey = this.config.env.CURSOR_API_KEY ?? ''
     return this.startRun(request, {
+      driver: this.config.driver,
       apiKey,
       model: this.config.model,
       disposeGraceMs: this.config.disposeGraceMs,
+      cliPath: this.config.cliPath,
+      timeoutMs: this.config.timeoutMs,
+      env: this.config.env,
     })
   }
 }

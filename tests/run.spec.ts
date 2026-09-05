@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import { startCursorRun } from '../src/run.ts'
+import type { CliResult } from '../src/cli-driver.ts'
 import type { CreateSdkAgent, SdkAgent, SdkRunHandle } from '../src/sdk.ts'
 
 function textPrompt(text: string): ContentBlock[] {
@@ -42,9 +43,12 @@ function fakeAgent(partial: Partial<SdkAgent> & Pick<SdkAgent, 'send'>): SdkAgen
 }
 
 const baseDeps = {
+  driver: 'sdk' as const,
   apiKey: 'test-key',
   model: 'composer-2.5',
   disposeGraceMs: 100,
+  cliPath: 'cursor-agent',
+  timeoutMs: 60_000,
 }
 
 describe('startCursorRun', () => {
@@ -140,5 +144,81 @@ describe('startCursorRun', () => {
         },
       }),
     ).rejects.toThrow(/empty|prompt|task/i)
+  })
+
+  it('rejects driver=sdk when apiKey missing', async () => {
+    await expect(
+      startCursorRun(fakeRequest({ prompt: 'x' }), {
+        ...baseDeps,
+        apiKey: '',
+        createAgent: async () => {
+          throw new Error('createAgent must not be called')
+        },
+      }),
+    ).rejects.toThrow(/apiKey|CURSOR_API_KEY|auth/i)
+  })
+
+  it('driver=cli does not require apiKey and settles cli results', async () => {
+    const run = await startCursorRun(fakeRequest({ prompt: 'x' }), {
+      ...baseDeps,
+      driver: 'cli',
+      apiKey: '',
+      createRun: async () => ({
+        sessionId: 'cli-session-1',
+        wait: async () => ({ kind: 'finished', text: '<summary>cli ok</summary><status>ok</status><body>detail</body>', sessionId: 'cli-session-1' }),
+        cancel: async () => {},
+        supports: () => true,
+      }),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('completed')
+    expect(String((result.output[0] as { text: string }).text)).toContain('cli ok')
+    expect(run.id).toBe('cli-session-1')
+    await run.dispose()
+  })
+
+  it('driver=cli maps cli errors to cursor: diagnostics', async () => {
+    const run = await startCursorRun(fakeRequest({ prompt: 'x' }), {
+      ...baseDeps,
+      driver: 'cli',
+      apiKey: '',
+      createRun: async () => ({
+        sessionId: 'cli-session-2',
+        wait: async () => ({ kind: 'error', category: 'auth', detail: 'not logged in', sessionId: 'cli-session-2' }),
+        cancel: async () => {},
+        supports: () => true,
+      }),
+    })
+    const result = await run.result
+    expect(result.stopReason).toBe('error')
+    const text = String((result.output[0] as { text: string }).text)
+    expect(text).toContain('cursor:query-run/auth')
+    expect(text).toContain('not logged in')
+    await run.dispose()
+  })
+
+  it('driver=cli maps cancellation to aborted', async () => {
+    const controller = new AbortController()
+    let resolveWait!: (value: CliResult) => void
+    const waitPromise = new Promise<CliResult>((resolve) => { resolveWait = resolve })
+    const cancel = vi.fn(async () => {
+      resolveWait({ kind: 'error', category: 'cancelled', detail: 'run cancelled locally', sessionId: 'cli-3' })
+    })
+    const run = await startCursorRun(fakeRequest({ prompt: 'x', signal: controller.signal }), {
+      ...baseDeps,
+      driver: 'cli',
+      apiKey: '',
+      createRun: async () => ({
+        sessionId: 'cli-3',
+        wait: () => waitPromise,
+        cancel,
+        supports: () => true,
+      }),
+    })
+    controller.abort()
+    const result = await run.result
+    expect(result.stopReason).toBe('aborted')
+    expect(cancel).toHaveBeenCalled()
+    await run.dispose()
   })
 })

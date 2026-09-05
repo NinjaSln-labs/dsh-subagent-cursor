@@ -71,13 +71,40 @@ describe('CursorProvider.start', () => {
     })
   })
 
-  it('wires the real startCursorRun by default', async () => {
+  it('wires the real startCursorRun by default (sdk driver without key rejects)', async () => {
     const provider = new CursorProvider(
       'cursor',
       fakeCtx(),
-      resolveConfig({ env: { CURSOR_API_KEY: '' } }),
+      resolveConfig({ driver: 'sdk', env: { CURSOR_API_KEY: '' } }),
     )
     // Empty key rejects inside startCursorRun — proves default runner is live.
     await expect(provider.start(fakeResolvedRequest(process.cwd()))).rejects.toThrow(/apiKey|CURSOR_API_KEY|auth/i)
+  })
+
+  it('defaults to cli driver (no key needed) and forwards driver fields', async () => {
+    const published: SubagentRun = {
+      id: 'run-cli' as SubagentRun['id'],
+      localAgent: undefined,
+      result: Promise.resolve({ output: [], stopReason: 'completed' }),
+      dispose: async () => {},
+    }
+    let capturedDeps: CursorRunDeps | undefined
+    const provider = new CursorProvider(
+      'cursor',
+      fakeCtx(),
+      resolveConfig({ driver: 'cli', env: {}, timeoutMs: 12345, cliPath: '/opt/cursor-agent' }),
+      async (_request, deps) => {
+        capturedDeps = deps
+        return published
+      },
+    )
+    const run = await provider.start(fakeResolvedRequest(process.cwd()))
+    expect(run).toBe(published)
+    expect(capturedDeps).toMatchObject({
+      driver: 'cli',
+      apiKey: '',
+      cliPath: '/opt/cursor-agent',
+      timeoutMs: 12345,
+    })
   })
 })

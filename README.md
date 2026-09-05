@@ -6,9 +6,10 @@
 [![License](https://img.shields.io/npm/l/dsh-subagent-cursor)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/NinjaSln-labs/dsh-subagent-cursor?style=social)](https://github.com/NinjaSln-labs/dsh-subagent-cursor)
 
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Cursor-as-subagent 提供方插件：一次本地 one-shot `@cursor/sdk` 运行、摘要优先的结果展示、可无人值守的 Profile Bundle。
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 Cursor-as-subagent 提供方插件：一次本地 one-shot Cursor 查询、摘要优先的结果展示、可无人值守的 Profile Bundle。
 
-- **Subagent 提供方** — 向 `ctx.subagents` 注册一个提供方（默认名 `cursor`），每次运行是一次父会话 cwd 下的本地 one-shot `@cursor/sdk` 查询。
+- **Subagent 提供方** — 向 `ctx.subagents` 注册一个提供方（默认名 `cursor`），每次运行是一次父会话 cwd 下的本地 one-shot Cursor 查询。
+- **双驱动** — 默认 `driver: cli`：spawn 本机 `cursor-agent -p`，复用 CLI 登录态，**无需 `CURSOR_API_KEY`**；可选 `driver: sdk`：走 `@cursor/sdk`（需要 Key）。
 - **宿主平面 Profile Bundle** — 与官方 Claude Code / Codex 提供方同族；对模型可见的工具由独立的 `dsh-tool-subagent` 行提供并指定本提供方。
 - **摘要优先结果** — 软解析 + summary / `<details>` 呈现，父代理一眼看到结论。
 
@@ -18,7 +19,7 @@
 dsh plugin add dsh-subagent-cursor
 ```
 
-本插件注册一个 `ctx.subagents` 提供方（默认名 `cursor`）。每次运行是一次父会话 cwd 下的本地 one-shot `@cursor/sdk` 查询。属于 host 平面的 Profile Bundle，与官方 Claude Code / Codex 提供方同族；对模型可见的工具由独立的 `dsh-tool-subagent` 行提供并指定本提供方。
+本插件注册一个 `ctx.subagents` 提供方（默认名 `cursor`）。每次运行是一次父会话 cwd 下的本地 one-shot Cursor 查询。属于 host 平面的 Profile Bundle，与官方 Claude Code / Codex 提供方同族；对模型可见的工具由独立的 `dsh-tool-subagent` 行提供并指定本提供方。
 
 ### 最小启用
 
@@ -29,9 +30,9 @@ plugins:
   - package: dsh-subagent-cursor
     config:
       providerName: cursor
-      model: composer-2.5
-      env:
-        CURSOR_API_KEY: ${CURSOR_API_KEY}
+      # model: composer-2.5          # 可选；cli 驱动默认 auto
+      # cliPath: cursor-agent        # 可选；默认从 PATH 解析 cursor-agent
+      # driver: cli                  # 默认 cli（登录态，无 Key）；sdk 需要 CURSOR_API_KEY
   - package: dsh-tool-subagent
     config:
       tools:
@@ -39,20 +40,23 @@ plugins:
           provider: cursor
 ```
 
-需要本机有效的 `CURSOR_API_KEY`（Cursor Dashboard → Integrations）。单测用 fake SDK，不依赖 Key。
+默认 `driver: cli` 要求本机已安装并登录 `cursor-agent` CLI（`cursor-agent login`），不需要 API Key。`driver: sdk` 需要 `CURSOR_API_KEY`（Cursor Dashboard → API Keys）。单测用 fake 驱动，不触网、两者都不依赖。
 
 ## 配置
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
 | `providerName` | `cursor` | 注册到 `ctx.subagents` 上的提供方名 |
-| `model` | `composer-2.5` | 传给 SDK 的 Cursor 模型 id |
-| `env` | `{}` | 叠加在凭据清洗后的父 env 之上的显式子进程/SDK 环境；在此提供 `CURSOR_API_KEY` |
+| `driver` | `cli` | 执行后端：`cli`（本机登录态）或 `sdk`（`@cursor/sdk` + Key） |
+| `model` | `composer-2.5` | 传给驱动的 Cursor 模型 id（cli 驱动可传 `auto`） |
+| `env` | `{}` | 叠加在凭据清洗后的父 env 之上的显式环境；`driver: sdk` 时在此提供 `CURSOR_API_KEY` |
+| `cliPath` | `cursor-agent` | CLI 可执行文件路径（`driver: cli`） |
+| `timeoutMs` | `600000` | 单次运行硬墙钟上限（ms，`driver: cli`） |
 | `disposeGraceMs` | `3000` | 关闭等待的正向宽限（ms） |
 
 ## 为什么用本地 one-shot
 
-每次委派都是父会话 cwd 下的独立 Cursor 查询，天然隔离、不污染父上下文；SDK 门面可注入（`createAgent`），单测用 fake SDK，不触网、无需 `CURSOR_API_KEY`。
+每次委派都是父会话 cwd 下的独立 Cursor 查询，天然隔离、不污染父上下文；CLI / SDK 驱动门面均可注入（`createRun` / `createAgent`），单测用 fake 驱动，不触网、无需 `CURSOR_API_KEY`。
 
 ## 开发
 

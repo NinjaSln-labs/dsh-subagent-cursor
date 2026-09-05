@@ -1,5 +1,5 @@
 /**
- * SDK one-shot run driver: cwd resolve → Agent.create/send → map RunResult →
+ * One-shot run driver: cwd resolve → create run (CLI or SDK) → map result →
  * SubagentRun (cancel, dispose, never-reject result after publication).
  */
 import { randomUUID } from 'node:crypto'
@@ -15,6 +15,7 @@ import {
   type SubagentStopReason,
 } from '@deepseek-ai/dsh-subagent'
 import type { RunResult } from '@cursor/sdk'
+import { createCliRun, type CliResult, type CliRunHandle, type CreateCliRun } from './cli-driver.ts'
 import { classifySdkError, formatDiagnostic, type FailureStage } from './failure.ts'
 import { wrapTaskPrompt } from './prompt.ts'
 import { formatForParent, parseResultText } from './result-format.ts'
@@ -22,13 +23,25 @@ import { createSdkAgent, type CreateSdkAgent, type SdkAgent, type SdkRunHandle }
 
 const PREFIX = 'dsh-subagent-cursor'
 
+/** Which backend executes the one-shot run. */
+export type CursorDriver = 'cli' | 'sdk'
+
 export type CursorRunDeps = {
+  /** Execution backend; `cli` (local login state, no key) by default. */
+  readonly driver: CursorDriver
   readonly createAgent?: CreateSdkAgent
+  readonly createRun?: CreateCliRun
   readonly apiKey: string
   readonly model: string
   readonly disposeGraceMs: number
+  /** cursor-agent executable path (driver=cli only). */
+  readonly cliPath: string
+  /** Hard wall-clock limit per one-shot run in ms (driver=cli only). */
+  readonly timeoutMs: number
   /** Load-validated cwd override; omit to use parent session cwd. */
   readonly configuredCwd?: string
+  /** Extra env layered over the credential-scrubbed parent env. */
+  readonly env?: Record<string, string>
   readonly onError?: (error: Error, stopReason: SubagentStopReason) => void
 }
 
@@ -75,6 +88,24 @@ function mapRunResult(run: RunResult): SubagentResult {
   }
 }
 
+function mapCliResult(result: CliResult): SubagentResult {
+  if (result.kind === 'finished') {
+    const formatted = formatForParent(parseResultText(result.text))
+    return { output: textOutput(formatted), stopReason: 'completed' }
+  }
+  if (result.category === 'cancelled') {
+    return {
+      output: textOutput(formatDiagnostic({ stage: 'query-run', category: 'cancelled', runId: result.sessionId })),
+      stopReason: 'aborted',
+    }
+  }
+  const line = formatDiagnostic({ stage: 'query-run', category: result.category, runId: result.sessionId })
+  return {
+    output: textOutput(`${line}\n${result.detail}`),
+    stopReason: 'error',
+  }
+}
+
 async function disposeCursorAgent(
   agent: SdkAgent | undefined,
   handle: SdkRunHandle | undefined,
@@ -101,30 +132,34 @@ async function disposeCursorAgent(
 }
 
 /**
- * Publish one Cursor SDK one-shot run. Pre-publication failures reject;
+ * Publish one Cursor one-shot run. Pre-publication failures reject;
  * post-publication failures settle through `result` (never reject).
+ *
+ * driver=cli (default): spawn `cursor-agent -p` using the local login state —
+ *   apiKey is NOT required. driver=sdk: `@cursor/sdk` Agent, requires apiKey.
  */
 export async function startCursorRun(
   request: SubagentStartRequest,
   deps: CursorRunDeps,
 ): Promise<SubagentRun> {
-  const apiKey = deps.apiKey.trim()
-  if (apiKey.length === 0) {
-    throw new Error(`${PREFIX}: CURSOR_API_KEY / apiKey is required (query-start/auth)`)
-  }
-
   const userText = textTask(request.prompt)
   if (request.signal.aborted) {
-    throw new Error(`${PREFIX}: request was aborted before SDK startup`)
+    throw new Error(`${PREFIX}: request was aborted before startup`)
+  }
+  if (deps.driver === 'sdk') {
+    const apiKey = deps.apiKey.trim()
+    if (apiKey.length === 0) {
+      throw new Error(`${PREFIX}: driver=sdk requires CURSOR_API_KEY / apiKey (query-start/auth); use driver=cli for local login auth`)
+    }
   }
 
   const parentCwd = request.parent.session.header.cwd
   const cwd = resolveChildCwd(PREFIX, deps.configuredCwd, parentCwd)
   const prompt = wrapTaskPrompt(userText)
-  const createAgent = deps.createAgent ?? createSdkAgent
 
   const controller = new AbortController()
   let activeHandle: SdkRunHandle | undefined
+  let activeCliRun: CliRunHandle | undefined
 
   const requestCancel = () => {
     if (!controller.signal.aborted) {
@@ -134,15 +169,57 @@ export async function startCursorRun(
     if (handle !== undefined && handle.supports('cancel')) {
       void handle.cancel().catch(() => {})
     }
+    const cliRun = activeCliRun
+    if (cliRun !== undefined) {
+      void cliRun.cancel().catch(() => {})
+    }
   }
   const onAbort = () => {
     requestCancel()
   }
   request.signal.addEventListener('abort', onAbort, { once: true })
 
+  if (deps.driver === 'cli') {
+    const createRun = deps.createRun ?? createCliRun
+    // spawn failures are post-publication settle material for CLI (no agent
+    // object to dispose): publish immediately, let wait() surface the error.
+    const cliRun = await createRun({
+      prompt,
+      model: deps.model,
+      cwd,
+      signal: request.signal,
+      cliPath: deps.cliPath,
+      timeoutMs: deps.timeoutMs,
+      env: deps.env,
+    })
+    if (controller.signal.aborted || request.signal.aborted) {
+      await cliRun.cancel().catch(() => {})
+      throw new Error(`${PREFIX}: request was aborted before startup`)
+    }
+    activeCliRun = cliRun
+
+    const result = settleRunResult({
+      attempt: async () => mapCliResult(await cliRun.wait()),
+      collectOutput: () => [],
+      cancelled: () => controller.signal.aborted,
+      onError: deps.onError,
+      signal: request.signal,
+      onAbort,
+    })
+
+    return subprocessRunHandle({
+      id: SessionId(cliRun.sessionId.length > 0 ? cliRun.sessionId : randomUUID()),
+      result,
+      signal: request.signal,
+      onAbort,
+      requestCancel,
+      teardown: async () => {},
+    })
+  }
+
   let agent: SdkAgent | undefined
   try {
-    agent = await createAgent({ apiKey, model: deps.model, cwd })
+    agent = await (deps.createAgent ?? createSdkAgent)({ apiKey: deps.apiKey.trim(), model: deps.model, cwd })
     if (controller.signal.aborted || request.signal.aborted) {
       throw new Error(`${PREFIX}: request was aborted before SDK startup`)
     }
