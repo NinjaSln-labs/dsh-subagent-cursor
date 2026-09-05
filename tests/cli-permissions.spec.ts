@@ -61,3 +61,13 @@ describe('ensureGlobalPermissions', () => {
     expect(out.kind).toBe('unchanged')
   })
 })
+
+describe('DEFAULT_PERMISSION_PLAN common read-only commands', () => {
+  it('covers curl/python3/ripgrep and common text tools', async () => {
+    const { DEFAULT_PERMISSION_PLAN } = await import('../src/cli-permissions.ts')
+    const allow = DEFAULT_PERMISSION_PLAN.allow
+    for (const cmd of ['Shell(curl:*)', 'Shell(python3)', 'Shell(rg)', 'Shell(sed)', 'Shell(diff)']) {
+      expect(allow).toContain(cmd)
+    }
+  })
+})

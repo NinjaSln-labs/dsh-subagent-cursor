@@ -39,15 +39,35 @@ export const DEFAULT_PERMISSION_PLAN: PermissionPlan = {
     'Shell(grep)',
     'Shell(fgrep)',
     'Shell(egrep)',
+    'Shell(rg)', // ripgrep 快速检索（若已装）
+    'Shell(fd)', // fd 找文件（若已装）
     'Shell(find)',
     'Shell(pwd)',
     'Shell(echo)',
-    // —— 开发 / git ——
+    'Shell(date)',
+    'Shell(file)',
+    'Shell(which)',
+    'Shell(du)',
+    'Shell(df)',
+    // —— 文本处理（只读管道）——
+    'Shell(sort)',
+    'Shell(uniq)',
+    'Shell(cut)',
+    'Shell(awk)',
+    'Shell(sed)', // 只读替换演示用；改写文件走 Write 工具
+    'Shell(diff)',
+    'Shell(cmp)',
+    // —— 开发 / git / 构建 ——
     'Shell(git)', // git log/status/diff/show 等（含只读子命令）
     'Shell(node)', // node -e/-p 求值、脚本
     'Shell(npm)',
     'Shell(npx)',
     'Shell(pnpm)',
+    'Shell(yarn)',
+    'Shell(python3)',
+    'Shell(python)',
+    // —— 网络只读抓取（curl 无 -o/-O/管道到 sh 等写操作；WebFetch 域名见下）——
+    'Shell(curl:*)', // 网络读；危险面（curl | sh）由 deny 或子代理纪律约束
     // —— 构建产物写放行（处理问题常需 build/test）——
     'Write(**)', // 项目内写；危险面靠 deny 保
     // —— 文档 / 网络读取 ——
@@ -64,6 +84,15 @@ export const DEFAULT_PERMISSION_PLAN: PermissionPlan = {
     'Write(**/*.pem)',
     'Write(**/id_rsa)',
     'Write(**/id_ed25519)',
+    // 危险执行面（默认拒绝，需授权才放开）
+    'Shell(rm:*)', // rm -rf 类破坏；但 rm 单个临时文件常被文件工具替代
+    'Shell(sudo)',
+    'Shell(kill)',
+    'Shell(reboot)',
+    'Shell(shutdown)',
+    // 注：curl | sh 这类「网络拉取即执行」链不在 allowlist 默认语义内——
+    // 子代理纪律（prompt footer）约束不执行未审计的远程脚本；如需硬拦截可
+    // 在用户级 cli-config deny 加对应 Shell 规则。
   ],
 }
 
