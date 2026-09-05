@@ -202,3 +202,16 @@ export function ensureGlobalPermissions(): EnsurePermissionsResult {
   writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
   return { kind: 'merged', filePath, added: [...added, ...addedDeny] }
 }
+
+/**
+ * 返回常用权限集中当前白名单缺失的条目（读 ~/.cursor/cli-config.json）。
+ * 配置文件不存在 → 视为全部缺失。用于委派前评估是否需要提示补齐。
+ */
+export function missingDefaultPermissions(
+  filePath: string = globalCliConfigPath(),
+): { readonly missing: readonly string[]; readonly present: number } {
+  const existing = readPermissions(filePath)
+  const allow = new Set(existing?.allow ?? [])
+  const missing = DEFAULT_PERMISSION_PLAN.allow.filter((item) => !allow.has(item))
+  return { missing, present: allow.size }
+}

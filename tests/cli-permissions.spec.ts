@@ -86,3 +86,25 @@ describe('grantPermissions', () => {
     expect(grantPermissions(['Shell(ping)']).added).toBe(0)
   })
 })
+
+describe('missingDefaultPermissions', () => {
+  it('reports which default entries are absent', async () => {
+    const { missingDefaultPermissions, ensureGlobalPermissions } = await import('../src/cli-permissions.ts')
+    ensureGlobalPermissions()
+    const file = join(fakeHome, '.cursor', 'cli-config.json')
+    // 删掉几个常用项模拟缺失
+    const cfg = JSON.parse(readFileSync(file, 'utf8'))
+    cfg.permissions.allow = cfg.permissions.allow.filter((x: string) => !['Shell(git)', 'Shell(node)'].includes(x))
+    writeFileSync(file, JSON.stringify(cfg, null, 2))
+    const { missing, present } = missingDefaultPermissions(file)
+    expect(missing).toContain('Shell(git)')
+    expect(missing).toContain('Shell(node)')
+    expect(present).toBeGreaterThan(0)
+  })
+  it('treats a missing config file as fully missing', async () => {
+    const { missingDefaultPermissions } = await import('../src/cli-permissions.ts')
+    const file = join(fakeHome, '.cursor', 'does-not-exist.json')
+    const { missing } = missingDefaultPermissions(file)
+    expect(missing.length).toBeGreaterThan(10)
+  })
+})

@@ -13,7 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-subagent'
 import type { CursorSubagentConfig } from './index.ts'
 import { startCursorRun, type CursorRunDeps } from './run.ts'
-import { grantPermissions } from './cli-permissions.ts'
+import { grantPermissions, missingDefaultPermissions } from './cli-permissions.ts'
 
 type Resolved = Required<CursorSubagentConfig>
 
@@ -40,9 +40,14 @@ export class CursorProvider implements SubagentProvider {
     private readonly startRun: CursorStartRunner = startCursorRun,
   ) {}
 
-  start(request: ResolvedSubagentStartRequest): Promise<SubagentRun> {
+  async start(request: ResolvedSubagentStartRequest): Promise<SubagentRun> {
     void this.ctx
     const apiKey = this.config.env.CURSOR_API_KEY ?? ''
+    const bridgeEnabled = this.config.driver === 'cli' && this.config.askOnBlocked
+    if (bridgeEnabled) {
+      // 事前授权：委派前若常用权限集明显不足，先弹窗补齐（运行中新增的再由 onBlocked 兜底）
+      await this.preflightPermissions(request)
+    }
     const deps: CursorRunDeps = {
       driver: this.config.driver,
       apiKey,
@@ -51,13 +56,45 @@ export class CursorProvider implements SubagentProvider {
       cliPath: this.config.cliPath,
       timeoutMs: this.config.timeoutMs,
       env: this.config.env,
-      // 授权桥：cli 结果被拒 → 宿主弹窗征询 → 允许则加白名单（askOnBlocked 开启时）
-      ...(this.config.driver === 'cli' && this.config.askOnBlocked
+      // 兜底授权：运行中被拒 → 宿主弹窗征询（依赖上面的 onBlocked 组装）
+      ...(bridgeEnabled
         ? { onBlocked: (blockedText: string, rejected?: readonly string[]) =>
             this.authorizeBlocked(blockedText, rejected, request) }
         : {}),
     }
     return this.startRun(request, deps)
+  }
+
+  /** 委派前评估 Cursor 权限覆盖度；显著不足时弹窗让用户补齐常用命令。 */
+  private async preflightPermissions(request: ResolvedSubagentStartRequest): Promise<void> {
+    const answerer = this.ctx.get('userQuestions')
+    if (answerer === undefined) return // 无问答服务 → 静默跳过
+    const { missing, present } = missingDefaultPermissions()
+    // 阈值：缺失 ≥ 5 项常用权限（或白名单近乎为空）才事前打扰
+    if (present > 0 && missing.length < 5) return
+    try {
+      const answer = await answerer.ask({
+        questions: [
+          {
+            id: 'cursor-permissions-baseline',
+            header: 'Cursor 权限初始化',
+            question: `Cursor 权限白名单当前缺 ${missing.length} 项常用命令（读文件/git/node/curl 等）。\n是否补齐，避免委派中途被拒？`,
+            options: [
+              { label: '补齐', description: '把常用权限加入白名单，委派更顺。' },
+              { label: '跳过', description: '保持现状；委派中真被拒时再逐个授权。' },
+            ],
+          },
+        ],
+        agent: request.parent,
+      })
+      const selected: string[] = answer.answers?.[0]?.selected ?? []
+      if (selected.includes('补齐')) {
+        const out = grantPermissions(missing)
+        this.ctx.logger?.info?.(`dsh-subagent-cursor: 委派前补齐 ${out.added} 项常用权限`)
+      }
+    } catch {
+      // 事前弹窗失败不阻塞委派
+    }
   }
 
   /** 弹宿主问题窗，把被拒命令授权进 Cursor allowlist（或让用户拒绝/自定义）。 */
