@@ -55,6 +55,8 @@ plugins:
 > - 未安装：`找不到 cursor-agent CLI … 安装：curl https://cursor.com/install -fsS | bash`（或配置 `cliPath`）
 > - 未登录：`cursor-agent 未登录 … 登录：cursor-agent login`
 
+> **权限预生成**（`autoPermissions: true`，默认开）：插件挂载时自动确保全局 `~/.cursor/cli-config.json` 含一份常用权限集（读文件、git、node/npm、web 文档、项目内写入），配置文件缺失则创建、已有则**只追加缺失项**（不动你的自定义 allow/deny，写入前自动备份）。敏感面默认 deny（`.env`、密钥、证书）。关闭：`autoPermissions: false`。
+
 ## 配置
 
 | 字段 | 默认 | 含义 |
@@ -66,6 +68,7 @@ plugins:
 | `cliPath` | `cursor-agent` | CLI 可执行文件路径（`driver: cli`） |
 | `timeoutMs` | `600000` | 单次运行硬墙钟上限（ms，`driver: cli`） |
 | `disposeGraceMs` | `3000` | 关闭等待的正向宽限（ms） |
+| `autoPermissions` | `true` | 挂载时预生成/补齐 Cursor CLI 权限集（创建或只追加合并，见上） |
 
 ## 为什么用本地 one-shot
 

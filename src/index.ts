@@ -12,6 +12,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { registerCursorProvider } from './provider.ts'
 import type { CursorDriver } from './run.ts'
+import { ensureGlobalPermissions, type EnsurePermissionsResult } from './cli-permissions.ts'
 
 /** Plugin config; every field optional with a sane default. */
 export interface CursorSubagentConfig {
@@ -32,6 +33,12 @@ export interface CursorSubagentConfig {
   timeoutMs?: number
   /** Positive grace (ms) for teardown waits (default 3000). */
   disposeGraceMs?: number
+  /**
+   * On plugin mount, ensure the global Cursor CLI config carries a sensible
+   * default permission set (create if missing, append-only merge if present).
+   * True by default so a fresh install can delegate right away.
+   */
+  autoPermissions?: boolean
 }
 
 export const name = 'dsh-subagent-cursor'
@@ -46,6 +53,7 @@ export const defaultConfig = {
   cliPath: 'cursor-agent',
   timeoutMs: 600_000,
   disposeGraceMs: 3000,
+  autoPermissions: true,
 } satisfies Required<CursorSubagentConfig>
 
 export function resolveConfig(config: CursorSubagentConfig = {}): Required<CursorSubagentConfig> {
@@ -57,10 +65,18 @@ export function resolveConfig(config: CursorSubagentConfig = {}): Required<Curso
     cliPath: config.cliPath ?? defaultConfig.cliPath,
     timeoutMs: config.timeoutMs ?? defaultConfig.timeoutMs,
     disposeGraceMs: config.disposeGraceMs ?? defaultConfig.disposeGraceMs,
+    autoPermissions: config.autoPermissions ?? defaultConfig.autoPermissions,
   }
 }
 
-export function apply(ctx: Context, config: CursorSubagentConfig = {}): void {
+/** 权限确保器（注入便于测试）。 */
+export type PermissionEnsurer = () => EnsurePermissionsResult
+
+export function apply(
+  ctx: Context,
+  config: CursorSubagentConfig = {},
+  ensurePermissions: PermissionEnsurer = () => ensureGlobalPermissions(),
+): void {
   const resolved = resolveConfig(config)
   if (!Number.isFinite(resolved.disposeGraceMs) || resolved.disposeGraceMs <= 0) {
     throw new Error('dsh-subagent-cursor: disposeGraceMs must be a positive finite number')
@@ -73,6 +89,16 @@ export function apply(ctx: Context, config: CursorSubagentConfig = {}): void {
   }
   if (resolved.providerName.trim() === '') {
     throw new Error('dsh-subagent-cursor: providerName must be non-empty')
+  }
+  if (resolved.autoPermissions) {
+    try {
+      const out = ensurePermissions()
+      const count = out.kind === 'merged' ? (out.added ?? []).length : 0
+      const summary = out.kind === 'unchanged' ? '已是最新' : `已 ${out.kind === 'created' ? '创建' : `补齐 ${count} 项`}`
+      ctx.logger.info(`dsh-subagent-cursor: cursor CLI 权限预生成 → ${out.filePath}（${summary}）`)
+    } catch (error) {
+      ctx.logger.warn(`dsh-subagent-cursor: cursor CLI 权限预生成跳过（${error instanceof Error ? error.message : String(error)}）`)
+    }
   }
   registerCursorProvider(ctx, resolved)
 }

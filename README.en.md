@@ -53,6 +53,8 @@ Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-age
 > - Not installed: `cursor-agent CLI not found … install: curl https://cursor.com/install -fsS | bash` (or set `cliPath`)
 > - Not logged in: `cursor-agent not logged in … login: cursor-agent login`
 
+> **Permission auto-provision** (`autoPermissions: true`, default): on mount the plugin ensures the global `~/.cursor/cli-config.json` carries a sensible default permission set (read files, git, node/npm, web docs, in-project writes). Creates the file if missing, or appends only missing entries (your custom allow/deny untouched; automatic backup before write). Sensitive surfaces are denied by default (`.env`, keys, certs). Disable with `autoPermissions: false`.
+
 ## Configuration
 
 | Field | Default | Meaning |
@@ -64,6 +66,7 @@ Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-age
 | `cliPath` | `cursor-agent` | CLI executable path (`driver: cli`) |
 | `timeoutMs` | `600000` | Hard wall-clock limit per run (ms, `driver: cli`) |
 | `disposeGraceMs` | `3000` | Positive grace (ms) for teardown waits |
+| `autoPermissions` | `true` | Provision/merge the Cursor CLI permission set on mount (create or append-only merge) |
 
 ## Why local one-shot
 
