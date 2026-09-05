@@ -33,6 +33,8 @@
 5. 发布后**立即删除 token**
 6. 之后配置 Trusted Publisher → 后续版本走 OIDC git 管道
 
+- **0.1.1** — **授权体系版（2026-09-06，OIDC 链路首发）**：approvalLevel 三档 / DSH 免问档自动授权 / 弹窗兜底+自动重发 / 权限集扩充；走 `cursor-v0.1.1` tag → OIDC publish 成功（provenance ✓）；途中修 publish.yml YAML（jobs 缺换行）。
+
 ## 发布后验证（共性纪律）
 
 - 确认 latest 已更新（`npm view dsh-subagent-cursor version`）——已验证 `0.1.0` ✓
