@@ -2,7 +2,6 @@
 # 部署纪律硬拦截：提交涉及插件源码（src/，lib/ 为构建产物已 ignore）时，
 # 强制跑装后自检（DEVELOPMENT.md「部署纪律：profile 安装」）。
 # 启用方式：git config core.hooksPath .githooks
-# 单库适配：本仓库根即插件目录，路径匹配 src/、scripts/（无需 monorepo 的 dsh-*/ 前缀）。
 
 changed=$(git diff --cached --name-only --diff-filter=ACMR \
         | grep -E '^(src|scripts)/' \

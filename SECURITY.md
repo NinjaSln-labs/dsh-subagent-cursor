@@ -1,6 +1,6 @@
 # 安全策略
 
-## 报告漏洞
+## 支持面
 
 本插件在宿主 harness 内以**子代理提供方**身份工作：它接收父会话的 `@cursor/sdk` 的一次性本地运行，并把结果格式化后返回给父会话。安全边界值得关注的点：
 
@@ -9,7 +9,9 @@
 - **任务文本**：只接受文本 prompt 块，拒绝空/非文本任务。
 - **依赖**：运行时最小依赖 `@cursor/sdk`。
 
-若你发现漏洞或安全缺陷，**不要**公开 issue——直接发邮件到仓库维护者（见 package.json author），或到 GitHub 仓库 Security 标签页用私密漏洞报告。
+## 报告漏洞
+
+若你发现漏洞或安全缺陷，**不要**公开 issue——到 GitHub 仓库 Security 标签页用私密漏洞报告（Private vulnerability reporting，首选）。
 
 ## 响应
 

@@ -46,7 +46,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit || true",
-    "test": "vitest run",
+    "test": "node scripts/verify.mjs",
     "check:deploy": "node scripts/check-deploy.mjs"
   },
   "dependencies": {

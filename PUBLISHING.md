@@ -20,17 +20,37 @@
   - peer 对齐宿主 alpha：cordis `^4.0.2` / 其余 dsh 宿主包 `^0.1.2-alpha.4`（peer 与 devDependencies 同范围）
   - 验证：strict typecheck + vitest（fake SDK 契约覆盖）+ build 全绿
 
+## 发布后验证（共性纪律）
+
+- 确认 latest 已更新（`npm view dsh-subagent-cursor version`）
+- provenance/attestations 徽章（npmjs 包页可见；OIDC 签发）
+- 实机重装路径实测一遍：README 安装命令 → `npm run check:deploy` PASS
+
 ## 发布流程（日常）
+
+> 用显式两步而非 `npm version` 自动 commit+tag：npm version 默认打 `v%s` tag，与本库触发器
+> `cursor-v*` 不符；且工作树脏时 npm 的自动 commit/tag 会被**静默跳过**。
 
 ```bash
 # 本单库仓库根即插件目录
-npm version patch --no-git-tag-version -m "chore: release v%s"
-git add package.json && git commit -m "chore: release v$(node -p "require('./package.json').version")"
-git tag cursor-v$(node -p "require('./package.json').version")
-git push && git push --tags    # CI 验证 → OIDC trusted publishing 发布
+npm version patch --no-git-tag-version
+V="$(node -p "require('./package.json').version")"
+git add package.json package-lock.json && git commit -m "chore: release dsh-subagent-cursor v$V — <一句话主旨>"
+git tag cursor-v$V
+git push && git push --tags    # CI 验证（verify.mjs 单源）→ 版本守卫 → OIDC trusted publishing 发布
 ```
 
-首发前置：npmjs.com 为 `dsh-subagent-cursor` 配置 Trusted Publisher（Owner=`NinjaSln-labs` / Repo=`dsh-subagent-cursor` / Workflow=`publish.yml`），源仓库需 public（已满足）。
+### canary 灰度通道（可选，先灰度再全量）
+
+```bash
+npm version prerelease --preid=next --no-git-tag-version
+V="$(node -p "require('./package.json').version")"
+git commit -am "chore: canary dsh-subagent-cursor v$V" && git tag cursor-v$V
+git push && git push --tags    # publish.yml 对 prerelease 自动走 dist-tag next
+# 实测通过 → 晋级 latest：npm dist-tag add dsh-subagent-cursor@x.y.z latest
+```
+
+首发前置：npmjs.com 为 `dsh-subagent-cursor` 配置 Trusted Publisher（Owner=`NinjaSln-labs` / Repo=`dsh-subagent-cursor` / Workflow=`publish.yml`），源仓库需 public（已满足）。配好前勿打 release tag。
 
 ## 维护规则
 

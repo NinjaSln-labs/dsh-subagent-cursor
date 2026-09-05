@@ -2,6 +2,8 @@
 
 > 原则：**短迭代、增量交付、持续反馈、复盘沉淀**。插件开发不是一次性的瀑布工程，而是一连串小迭代——每个功能就是一个迭代，每个迭代结束都要交付可用的版本、收集反馈、复盘沉淀。
 > 本仓库是 `dsh-subagent-cursor` 的**独立单库**（2026-09 从 dsh-plugins monorepo 迁出），仓库根即插件目录。
+> 开发 → 验证 → 构建 → 发布的通用规范见 AGENTS.md / CONTRIBUTING.md；本文件聚焦本插件专属流程与部署纪律。
+> **验证链单源**：`npm test` = `node scripts/verify.mjs`（build → typecheck → vitest，本地与 CI 同一入口）。
 
 ## 核心循环（一个迭代 = 一个功能）
 

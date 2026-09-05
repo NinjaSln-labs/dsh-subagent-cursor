@@ -7,13 +7,18 @@
 #   （来源仓库须 public 才能生成 provenance）
 # - 权限最小化：contents: read + id-token: write（OIDC 签发所需）
 # - 版本一致性守卫：tag 版本必须与 package.json version 完全一致
-# - actions 按 SHA 固定
+# - actions 按 SHA 固定（防供应链；升级 action 时换 SHA 并注明版本）
+# - 可选人工审批门：GitHub repo Settings → Environments 建 npm-publish 并设
+#   required reviewers 后取消 environment 行注释（npm 端 trusted publisher 的
+#   environment 字段须与此同名，逐字段一致）
 name: publish
 
 on:
   push:
     tags:
       - 'cursor-v*'
+# 注：模板建议 tag 格式 subagent-cursor-v*；本仓沿用 cursor-v*（HANDOFF 已记录，
+# 且 npmjs Trusted Publisher 待配置时一并定稿，改格式需同步 Guard 步骤）
 
 permissions:
   contents: read
@@ -23,8 +28,7 @@ concurrency:
   group: npm-publish
   cancel-in-progress: false
 
-jobs:
-  publish:
+jobs:  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,11 +52,8 @@ jobs:
           fi
       - name: Install
         run: npm ci --legacy-peer-deps
-      - name: Verify (strict typecheck + unit tests + build)
-        run: |
-          npm run typecheck
-          npm test
-          npm run build
+      - name: Verify (verify.mjs 单源：typecheck + vitest + build)
+        run: npm test
       - name: Publish to npm (OIDC trusted publishing)
         # 升级 npm：trusted publishing 需 npm CLI >= 11.5.1（含 OIDC 登录支持）。
         # OIDC 认证由 id-token: write 提供，无需 NODE_AUTH_TOKEN；provenance

@@ -1,15 +1,28 @@
+# 依赖与构建产物
 node_modules/
 lib/
+*.tsbuildinfo
 *.tgz
+
+# 本机私有信息不入库（与 AGENTS.md 机密纪律同源）
+.env
+.env.*
 .DS_Store
+Thumbs.db
 *.log
 
 # 本地交接文档私有，不追踪、不入仓库
 HANDOFF.md
 HANDOFF-ARCHIVE/
 
-# commit-msg 钩子含本地私有身份检查，不追踪（pre-commit 随仓库分发）
+# 本机私有钩子（commit-msg 含身份检查）不追踪；pre-commit 随仓库分发
 .githooks/commit-msg
+
+# scaffold 过程目录
 .scaffold-update/
 .scaffold-merge/
 .scaffold/conflicts/
+
+# 测试产物（基线入库，结果不入）
+test-results/
+visual/results/
