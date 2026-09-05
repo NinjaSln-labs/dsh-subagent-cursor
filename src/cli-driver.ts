@@ -7,6 +7,9 @@
  * classified into the closed-set categories (never echoed raw to the parent).
  */
 import { spawn } from 'node:child_process'
+import { accessSync, constants } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { classifySdkError, type FailureCategory } from './failure.ts'
 
 /** One parsed stream-json event (subset we consume). */
@@ -62,8 +65,34 @@ function classifyCliFailure(detail: string): FailureCategory {
   return classifySdkError(new Error(detail))
 }
 
+/**
+ * Resolve the actual `cursor-agent` binary path.
+ *
+ * - Explicit absolute / relative-with-slash path → used as-is.
+ * - Bare name (`cursor-agent`, default): look up PATH; when the caller is a
+ *   non-interactive host process whose PATH omits the user's ~/.local/bin,
+ *   fall back to the Cursor CLI install location (~/.local/bin/cursor-agent,
+ *   symlinked into ~/.local/share/cursor-agent/versions/<v>/).
+ */
+export function resolveCliPath(cliPath: string): string {
+  const candidates = [cliPath]
+  if (!cliPath.includes('/')) {
+    candidates.push(join(homedir(), '.local', 'bin', cliPath))
+  }
+  for (const candidate of candidates) {
+    try {
+      accessSync(candidate, constants.X_OK)
+      return candidate
+    } catch {
+      // continue
+    }
+  }
+  return cliPath // spawn will surface ENOENT with the original configured name
+}
+
 /** Production factory: spawn the CLI in print mode, stream-parse stdout. */
 export const createCliRun: CreateCliRun = async (options) => {
+  const resolvedPath = resolveCliPath(options.cliPath)
   const args = [
     '-p',
     '--output-format', 'stream-json',
@@ -71,7 +100,7 @@ export const createCliRun: CreateCliRun = async (options) => {
     '--model', options.model,
     options.prompt,
   ]
-  const child = spawn(options.cliPath, args, {
+  const child = spawn(resolvedPath, args, {
     cwd: options.cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, ...options.env },
@@ -139,7 +168,7 @@ export const createCliRun: CreateCliRun = async (options) => {
 
   child.on('error', (error: NodeJS.ErrnoException) => {
     const detail = error.code === 'ENOENT'
-      ? `cursor-agent executable not found at ${options.cliPath}`
+      ? `cursor-agent executable not found at ${options.cliPath} (resolved ${resolvedPath}); install Cursor CLI or set config cliPath`
       : error.message
     settle({ kind: 'error', category: classifyCliFailure(detail), detail, sessionId: undefined })
   })

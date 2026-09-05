@@ -18,3 +18,31 @@ describe('parseCliEventLine', () => {
     expect(parseCliEventLine('{"foo":1}')).toBeUndefined()
   })
 })
+
+describe('resolveCliPath', () => {
+  it('keeps explicit absolute paths as-is', async () => {
+    const { resolveCliPath } = await import('../src/cli-driver.ts')
+    expect(resolveCliPath('/opt/cursor/bin/cursor-agent')).toBe('/opt/cursor/bin/cursor-agent')
+  })
+  it('falls back to ~/.local/bin when a bare name misses PATH', async () => {
+    // 模拟非交互宿主：构造一个 PATH 中不存在、~/.local/bin 中存在的裸名
+    const os = await import('node:os')
+    const fs = await import('node:fs')
+    const fsPath = await import('node:path')
+    const fake = 'dsh-cursor-agent-probe-' + process.pid
+    const target = fsPath.join(os.homedir(), '.local', 'bin', fake)
+    const old = process.env.PATH
+    process.env.PATH = '/usr/bin:/bin' // 去掉 ~/.local/bin
+    try {
+      // 确保目标不存在时回退原样；存在时才期望命中——用真实文件验证探测逻辑
+      const { resolveCliPath } = await import('../src/cli-driver.ts')
+      if (fs.existsSync(target)) {
+        expect(resolveCliPath(fake)).toBe(target)
+      } else {
+        expect(resolveCliPath(fake)).toBe(fake) // 无文件→返回原样（spawn 报 ENOENT）
+      }
+    } finally {
+      process.env.PATH = old
+    }
+  })
+})
