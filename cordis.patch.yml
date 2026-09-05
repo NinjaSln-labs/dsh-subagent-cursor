@@ -6,8 +6,11 @@
 #   - maxDepth: 'provider-managed' — REQUIRED. Cursor is an out-of-process
 #     provider with capabilities.depthLimit=false; a numeric maxDepth (tool
 #     default 3) fails mount loud ("provider cannot enforce maxDepth").
-#   - no backgroundMode — Cursor runs are one-shot; `continuable` is NOT
-#     supported and fails mount loud.
+#   - backgroundMode: 'one-shot' — Cursor runs are one-shot; each call
+#     is synchronous by default (waits for the result). The caller may still
+#     opt into a background job per call via run_in_background: true; the tool
+#     schema keeps that parameter visible. `continuable` is NOT supported and
+#     fails mount loud.
 - insert:
     - id: subagent-cursor
       name: 'dsh-subagent-cursor'
@@ -17,3 +20,4 @@
         provider: cursor
         toolName: subagent_cursor
         maxDepth: provider-managed
+        backgroundMode: one-shot
