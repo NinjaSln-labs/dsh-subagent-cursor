@@ -1,30 +1,43 @@
 # 发布记录：dsh-subagent-cursor
 
-**发布状态（2026-09 单库化）：** 尚未发布到 npm（`npm view dsh-subagent-cursor` 为 E404）。
+**发布状态（2026-09-06）：** ✅ **已发布** `0.1.0`（npm latest）。首发用一次性 publish token（npm Trusted Publishing 不支持首发，见下方 bootstrap 记录）；后续版本待配 Trusted Publisher 后走 OIDC git 管道。
 
 > 本仓库 2026-09 从 dsh-plugins monorepo 迁出为独立单库（`NinjaSln-labs/dsh-subagent-cursor`），
 > 仓库根即插件目录。首次发布即在本单库完成。
 
 | 项 | 状态 |
 |---|---|
-| npm | ⏳ 未发布（首发待配 Trusted Publisher 后走 OIDC） |
+| npm | ✅ `0.1.0`（latest，2026-09-06 首发） |
 | GitHub | ✅ 单库 `NinjaSln-labs/dsh-subagent-cursor`（public，subtree split 保留历史） |
-| profile | `~/.dsh/profiles/web` 部署按 DEVELOPMENT.md 纪律（未发版 = `file:` 直装） |
-| 发布管道 | ⏳ tag → 版本守卫 → 验证链 → OIDC trusted publishing 直发（待配置） |
+| profile | `~/.dsh/profiles/web` 部署按 DEVELOPMENT.md 纪律（已发版可切 registry，仍 file: 也可） |
+| 发布管道 | ⏳ tag → 版本守卫 → 验证链 → OIDC（Trusted Publisher 待配） |
 
 ## 版本历史
 
-- **0.1.0** — **单库化后首个版本（首发）**：
-  - 单库迁移：dsh-plugins monorepo → `NinjaSln-labs/dsh-subagent-cursor` 独立仓库（subtree split 保留历史）
-  - 仓库规范化：LICENSE / CONTRIBUTING / SECURITY / DEVELOPMENT / PUBLISHING / 双语 README；check:deploy + pre-commit 部署纪律落地
-  - peer 对齐宿主 alpha：cordis `^4.0.2` / 其余 dsh 宿主包 `^0.1.2-alpha.4`（peer 与 devDependencies 同范围）
-  - 验证：strict typecheck + vitest（fake SDK 契约覆盖）+ build 全绿
+- **0.1.0** — **正式首发（2026-09-06，npm registry）**：
+  - 单库迁移 + 仓库规范化 + peer 对齐宿主 alpha + 验证链 13/13（见下历史行）
+  - **双驱动架构**：cli 驱动默认（复用本机 cursor-agent 登录态，无需 CURSOR_API_KEY）+ sdk 可选
+  - 就绪检测 / cliPath 回退 / 权限自动预生成 / 结果 Cursor 归属标记 / 默认同步（`backgroundMode: one-shot`）
+  - 首次发布方式：一次性 publish token（bootstrap），非 OIDC——npm 要求包先存在才能配 Trusted Publisher
+  - 验证：registry 下载实装可加载 + verify.mjs 全绿（41 测试）+ check:deploy PASS
+
+## 首次发布记录（bootstrap，新包名专用）
+
+> **npm Trusted Publishing 不支持首发**：包不存在时 npmjs.com 无页面可配 Trusted Publisher
+> （[npm docs](https://docs.npmjs.com/trusted-publishers/) / npm/cli #8544）。全新包必须先传统方式发一次。
+
+1. 生成**一次性 publish token**（npmjs → Access Tokens → Granular，限定本包、短期有效）
+2. 写入 `~/.npmrc`（`//registry.npmjs.org/:_authToken=` + token）
+3. `npm whoami` 验证 → `npm publish --access public`（会先跑 prepublishOnly build）
+4. `npm view <pkg> version` 确认（registry 有 ~5s 传播延迟，稍候重查）
+5. 发布后**立即删除 token**
+6. 之后配置 Trusted Publisher → 后续版本走 OIDC git 管道
 
 ## 发布后验证（共性纪律）
 
-- 确认 latest 已更新（`npm view dsh-subagent-cursor version`）
-- provenance/attestations 徽章（npmjs 包页可见；OIDC 签发）
-- 实机重装路径实测一遍：README 安装命令 → `npm run check:deploy` PASS
+- 确认 latest 已更新（`npm view dsh-subagent-cursor version`）——已验证 `0.1.0` ✓
+- provenance/attestations 徽章（OIDC 签发；首发为 token 方式无 provenance，待后续 OIDC 版本）
+- 实机重装路径实测一遍：README 安装命令 → `npm run check:deploy` PASS（registry 下载实装可加载已验证）
 
 ## 发布流程（日常）
 

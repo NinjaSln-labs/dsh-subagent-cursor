@@ -2,19 +2,14 @@
 
 ## Unreleased
 
-- feat: 双驱动架构——新增 `driver: cli`（默认）：spawn 本机 `cursor-agent -p --output-format stream-json`，复用 CLI 登录态，**无需 `CURSOR_API_KEY`**（实测 apiKeySource=login）；`driver: sdk` 保留 `@cursor/sdk` 路径（需要 Key）
-- feat: 新增配置字段 `driver` / `cliPath` / `timeoutMs`（默认 600000 硬墙钟）；`model` 支持传 `auto`（cli 驱动）
-- feat: CLI 流式事件解析（`parseCliEventLine`）+ 结果映射到既有摘要优先格式与闭集诊断线（超时/取消/认证分类）
-- feat: **cli 驱动就绪检测**——委派前自动调 `cursor-agent status`（解析输出，不读用户凭据）：缺装报安装指引（`curl https://cursor.com/install -fsS | bash` / 配 `cliPath`），未登录报 `cursor-agent login` 指引，替代黑盒失败
-- feat: **CLI 权限自动预生成**（`autoPermissions` 默认开）——插件挂载时确保全局 `~/.cursor/cli-config.json` 含常用权限集（读文件 / git / node-npm / web 文档 / 项目内写入）；缺失创建、已有只追加缺失项、写入前自动备份、敏感面默认 deny（.env/密钥/证书）；`cli-permissions.ts` 模块可注入测试
-- feat: **bundle 自带工具行**（`tool-subagent-cursor`）——`provider: cursor` / `toolName: subagent_cursor` / `maxDepth: provider-managed`；挂包即得完整能力，避免用户手写工具行踩坑
-- docs: README/DESIGN 写明工具行硬契约——`maxDepth: provider-managed` 必须（cursor `depthLimit=false`，数字 maxDepth 挂载失败）；**禁止 `backgroundMode: continuable`**（one-shot）
-- chore: scaffold 标准化接入——CI 工作流、验证链单源 `scripts/verify.mjs`、治理文档吸收模板条款
-- test: fake 驱动契约覆盖扩至 22 例（cli finished/error/cancelled + 事件解析 + provider 转发）
-- 验证：verify.mjs 验证链全绿 + check:deploy FAIL 0 + 真实 CLI 实机冒烟通过（登录态无 Key，summary/status/body 全链路正确）
+- （暂无——0.1.0 已发布，见下）
 
-## 0.1.0
+## 0.1.0（2026-09-06 首发 npm）
 
+- feat: 双驱动架构——`driver: cli`（默认，spawn 本机 `cursor-agent` 登录态，无需 Key）+ `driver: sdk`（`@cursor/sdk`，需 Key）
+- feat: cli 驱动就绪检测 + cliPath 回退 + CLI 权限自动预生成（`autoPermissions` 默认开）
+- feat: bundle 自带工具行（`tool-subagent-cursor`，maxDepth: provider-managed / backgroundMode: one-shot）
+- feat: 结果 Cursor 归属标记 + markdown 证据（无裸 HTML）+ 子代理残留标签净化
 - feat: Cursor one-shot subagent provider via `@cursor/sdk` (`create` / `send` / `wait` / `cancel`)
 - feat: summary-first parent output (`formatForParent` + task result footer)
 - feat: closed-set failure lines `cursor:<stage>/<category>`
