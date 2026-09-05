@@ -1,7 +1,7 @@
 {
   "name": "dsh-subagent-cursor",
   "description": "Cursor-as-subagent provider for DeepSeek Harness: one-shot local runs via @cursor/sdk, summary-first result presentation, unattended Profile Bundle.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "ninjasln",
     "url": "https://github.com/NinjaSln-labs"

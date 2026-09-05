@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.1（2026-09-06，OIDC 链路首发验证）
 
-- （暂无——0.1.0 已发布，见下）
+- feat: **授权体系**——approvalLevel 三档（trusted --yolo 自授权 / balanced 弹窗 / strict 硬白名单）；按 DSH permissionPresets 免问档自动授权（approval=never 静默放行+重发零弹窗）；委派前补齐弹窗；被拒弹窗（授权/拒绝/自定义）+ 授权后自动重发（限 2 次）
+- feat: 默认权限集扩充 40+ 常用非修改类命令（curl/python3/rg/文本处理等）；stream 结构化 rejected 提取被拒命令
+- feat: 结果 marker 幂等（自动重发无重复前缀）；诊断走 ctx.logger
+- docs: README 措辞修正（one-shot 任务执行非仅查询）+ approvalLevel/配置表更新
 
 ## 0.1.0（2026-09-06 首发 npm）
 
