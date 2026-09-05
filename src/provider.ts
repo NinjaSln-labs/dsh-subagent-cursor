@@ -80,9 +80,11 @@ export class CursorProvider implements SubagentProvider {
     }
     diag('userQuestions available')
     try {
+      // 只取命令名展示（不含参数/完整命令行）；授权粒度 = Shell(<命令名>)
       const deniedCommands = (rejected ?? []).filter((c) => c.length > 0)
-      const deniedDetail = deniedCommands.length > 0
-        ? deniedCommands.map((cmd) => `  ${cmd}`).join('\n')
+      const deniedNames = deniedCommands.map((cmd: string) => cmd.split(/\s+/, 1)[0] ?? cmd)
+      const deniedDetail = deniedNames.length > 0
+        ? deniedNames.map((name: string) => `  ${name}`).join('\n')
         : `  ${blockedText.split('\n', 1)[0]}`
       // ask 需要发起委派的 exact-live agent（request.parent）才能弹给人
       const answer = await answerer.ask({
@@ -92,11 +94,9 @@ export class CursorProvider implements SubagentProvider {
             header: 'Cursor 权限授权',
             question: `Cursor 子代理要用的命令被权限策略拒绝：\n${deniedDetail}\n\n如何处置？`,
             options: [
-              deniedCommands.length > 0
-                ? { label: `授权这 ${deniedCommands.length} 条命令`, description: `加入 Cursor 白名单后重试本委派。` }
-                : { label: '授权放行', description: '把命令加入 Cursor 白名单后重试本委派。' },
+              { label: '授权', description: '把上述命令加入 Cursor 白名单，重试本委派即可。' },
               { label: '拒绝', description: '保留原样，仅报告被拒结果。' },
-              { label: '自定义', description: '自己指定要放行的命令（选此项并在输入框填写，如 Shell(ping)，多条约逗号/换行分隔）。' },
+              { label: '自定义', description: '自己指定要放行的命令（选此项并在输入框填写，如 ping，多条约逗号/换行分隔）。' },
             ],
           },
         ],
@@ -105,10 +105,10 @@ export class CursorProvider implements SubagentProvider {
       const selected: string[] = answer.answers?.[0]?.selected ?? []
       const custom: string = answer.answers?.[0]?.custom?.trim() ?? ''
       let grants: string[] = []
-      if (selected.includes('授权放行') || selected.some((s: string) => s.startsWith('授权这'))) {
-        // 精确放行被拒命令（Shell(<cmd>) 粒度）
-        grants = deniedCommands.length > 0
-          ? deniedCommands.map((cmd: string) => `Shell(${cmd.split(/\s+/, 1)[0]})`)
+      if (selected.includes('授权')) {
+        // 精确放行被拒命令名（Shell(<命令名>) 粒度）
+        grants = deniedNames.length > 0
+          ? deniedNames.map((name: string) => `Shell(${name})`)
           : []
       } else if (selected.includes('自定义') && custom.length > 0) {
         // 用户自填：兼容 Shell(...) 形式与裸命令名
