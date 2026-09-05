@@ -42,14 +42,16 @@ export function parseResultText(text: string): ParsedResult {
 
 /**
  * Parent-facing tool text: summary first; body marked as detail
- * (UI may fold the detail section).
+ * (UI may fold the detail section). Optional `marker` prefixes the line so the
+ * parent conversation can attribute the result to its source (e.g. Cursor).
  */
-export function formatForParent(parsed: ParsedResult): string {
+export function formatForParent(parsed: ParsedResult, marker?: string): string {
   const status = parsed.status === 'unknown' ? '' : ` [${parsed.status}]`
   const detail = parsed.body.length === 0 || parsed.body === parsed.summary
     ? ''
     : `\n\n<details>\n${parsed.body}\n</details>`
-  return `${parsed.summary}${status}${detail}`
+  const head = marker === undefined ? '' : `${marker}：`
+  return `${head}${parsed.summary}${status}${detail}`
 }
 
 function firstLine(text: string): string {

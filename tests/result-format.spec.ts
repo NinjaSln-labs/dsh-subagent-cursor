@@ -41,3 +41,20 @@ describe('formatDiagnostic', () => {
       .toBe('cursor:query-run/auth; run=r1')
   })
 })
+
+describe('formatForParent with marker', () => {
+  it('prefixes the summary with the marker', async () => {
+    const { formatForParent, parseResultText } = await import('../src/result-format.ts')
+    const out = formatForParent(parseResultText('<summary>ok done</summary><status>ok</status><body>detail</body>'), 'Cursor 委派结果')
+    expect(out.startsWith('Cursor 委派结果：')).toBe(true)
+    expect(out).toContain('ok done')
+    expect(out).toContain('[ok]')
+  })
+  it('keeps output unchanged without a marker', async () => {
+    const { formatForParent, parseResultText } = await import('../src/result-format.ts')
+    const withMarker = formatForParent(parseResultText('<summary>s</summary>'), 'Cursor 委派结果')
+    const without = formatForParent(parseResultText('<summary>s</summary>'))
+    expect(withMarker.startsWith('Cursor 委派结果：s')).toBe(true)
+    expect(without.startsWith('Cursor 委派结果')).toBe(false)
+  })
+})

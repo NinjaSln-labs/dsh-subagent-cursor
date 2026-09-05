@@ -109,7 +109,7 @@ function mapRunResult(run: RunResult): SubagentResult {
 
 function mapCliResult(result: CliResult): SubagentResult {
   if (result.kind === 'finished') {
-    const formatted = formatForParent(parseResultText(result.text))
+    const formatted = formatForParent(parseResultText(result.text), 'Cursor 委派结果')
     return { output: textOutput(formatted), stopReason: 'completed' }
   }
   if (result.category === 'cancelled') {
