@@ -69,6 +69,7 @@ plugins:
 | `timeoutMs` | `600000` | 单次运行硬墙钟上限（ms，`driver: cli`） |
 | `disposeGraceMs` | `3000` | 关闭等待的正向宽限（ms） |
 | `autoPermissions` | `true` | 挂载时预生成/补齐 Cursor CLI 权限集（创建或只追加合并，见上） |
+| `approvalLevel` | `balanced` | 命令审批等级：`balanced`（白名单外弹授权窗，默认）/ `trusted`（spawn `--yolo` 自动放行不弹窗）/ `strict`（硬白名单，不弹不自动放） |
 
 ## 为什么用本地 one-shot
 

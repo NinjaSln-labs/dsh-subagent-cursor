@@ -42,10 +42,22 @@ export interface CursorSubagentConfig {
   /**
    * When a cli delegation result carries a permission-denied trace, ask the
    * user (host answerer popup) whether to grant the common commands and retry.
-   * Default false — enable explicitly if you want the interactive bridge.
+   * Superseded by `approvalLevel` when that is set. Default false.
    */
   askOnBlocked?: boolean
+  /**
+   * Command-approval posture for the cursor subprocess:
+   *   'balanced' (default) — allowlist is respected; denied commands pop the
+   *     authorization bridge (when askOnBlocked is on / preflight fills gaps).
+   *   'trusted' — spawn with --yolo so commands auto-approve (except explicit
+   *     deny rules); no popups. Use for trusted/automation contexts.
+   *   'strict' — allowlist enforced hard; no popups, no auto-approve.
+   */
+  approvalLevel?: ApprovalLevel
 }
+
+/** 命令审批等级。 */
+export type ApprovalLevel = 'balanced' | 'trusted' | 'strict'
 
 export const name = 'dsh-subagent-cursor'
 /** Subprocess peer reserved for Phase 0 process ownership; drivers own their processes. */
@@ -58,6 +70,7 @@ export const defaultConfig = {
   env: {},
   cliPath: 'cursor-agent',
   timeoutMs: 600_000,
+  approvalLevel: 'balanced' as ApprovalLevel,
   disposeGraceMs: 3000,
   autoPermissions: true,
   askOnBlocked: false,
@@ -74,6 +87,7 @@ export function resolveConfig(config: CursorSubagentConfig = {}): Required<Curso
     disposeGraceMs: config.disposeGraceMs ?? defaultConfig.disposeGraceMs,
     autoPermissions: config.autoPermissions ?? defaultConfig.autoPermissions,
     askOnBlocked: config.askOnBlocked ?? defaultConfig.askOnBlocked,
+    approvalLevel: config.approvalLevel ?? defaultConfig.approvalLevel,
   }
 }
 
@@ -97,6 +111,9 @@ export function apply(
   }
   if (resolved.providerName.trim() === '') {
     throw new Error('dsh-subagent-cursor: providerName must be non-empty')
+  }
+  if (!['balanced', 'trusted', 'strict'].includes(resolved.approvalLevel)) {
+    throw new Error(`dsh-subagent-cursor: approvalLevel must be balanced|trusted|strict (got ${JSON.stringify(resolved.approvalLevel)})`)
   }
   if (resolved.autoPermissions) {
     try {

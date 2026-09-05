@@ -43,7 +43,10 @@ export class CursorProvider implements SubagentProvider {
   async start(request: ResolvedSubagentStartRequest): Promise<SubagentRun> {
     void this.ctx
     const apiKey = this.config.env.CURSOR_API_KEY ?? ''
-    const bridgeEnabled = this.config.driver === 'cli' && this.config.askOnBlocked
+    const level = this.config.approvalLevel
+    const isCli = this.config.driver === 'cli'
+    // 授权桥仅 balanced 档启用（trusted → --yolo 自授权；strict → 硬白名单不打扰）
+    const bridgeEnabled = isCli && level === 'balanced'
     if (bridgeEnabled) {
       // 事前授权：委派前若常用权限集明显不足，先弹窗补齐（运行中新增的再由 onBlocked 兜底）
       await this.preflightPermissions(request)
@@ -56,6 +59,7 @@ export class CursorProvider implements SubagentProvider {
       cliPath: this.config.cliPath,
       timeoutMs: this.config.timeoutMs,
       env: this.config.env,
+      approvalLevel: level,
       // 兜底授权：运行中被拒 → 宿主弹窗征询 → 授权后自动重发（retry 由 run.ts 提供）
       ...(bridgeEnabled
         ? { onBlocked: (blockedText: string, rejected: readonly string[] | undefined, retry: () => Promise<string>) =>

@@ -7,6 +7,7 @@ import type { CursorRunDeps } from '../src/run.ts'
 
 function fakeCtx(): Context {
   return {
+    get: () => undefined, // userQuestions 不可用 → preflight/授权桥静默跳过
     logger: { info: () => {}, warn: () => {}, error: () => {} },
     subagents: { registerProvider: () => {} },
   } as unknown as Context
@@ -137,7 +138,7 @@ describe('CursorProvider authorization bridge assembly', () => {
     expect(out).toContain('whoami was rejected') // keep() 保留原文
     expect(capturedDeps?.onBlocked).toBeDefined()
   })
-  it('does not assemble onBlocked when askOnBlocked is off', async () => {
+  it('does not assemble onBlocked under strict or trusted approvalLevel', async () => {
     const { CursorProvider } = await import('../src/provider.ts')
     const { resolveConfig } = await import('../src/index.ts')
     const published = {
@@ -145,14 +146,17 @@ describe('CursorProvider authorization bridge assembly', () => {
       result: Promise.resolve({ output: [], stopReason: 'completed' as const }),
       dispose: async () => {},
     }
-    let capturedDeps: CursorRunDeps | undefined
-    const startRun = async (_r: unknown, deps: CursorRunDeps) => { capturedDeps = deps; return published }
-    const provider = new CursorProvider(
-      'cursor',
-      { get: () => undefined, logger: { info: () => {}, warn: () => {} }, subagents: {} } as never,
-      resolveConfig({ driver: 'cli', askOnBlocked: false }), startRun as never,
-    )
-    await provider.start(fakeResolvedRequest(process.cwd()) as never)
-    expect(capturedDeps?.onBlocked).toBeUndefined()
+    for (const level of ['strict', 'trusted'] as const) {
+      let capturedDeps: CursorRunDeps | undefined
+      const startRun = async (_r: unknown, deps: CursorRunDeps) => { capturedDeps = deps; return published }
+      const provider = new CursorProvider(
+        'cursor',
+        { get: () => undefined, logger: { info: () => {}, warn: () => {} }, subagents: {} } as never,
+        resolveConfig({ driver: 'cli', approvalLevel: level }), startRun as never,
+      )
+      await provider.start(fakeResolvedRequest(process.cwd()) as never)
+      expect(capturedDeps?.onBlocked, `level=${level}`).toBeUndefined()
+      expect(capturedDeps?.approvalLevel, `level=${level}`).toBe(level)
+    }
   })
 })

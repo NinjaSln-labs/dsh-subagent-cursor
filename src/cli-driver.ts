@@ -42,6 +42,8 @@ export type CreateCliRunOptions = {
   readonly timeoutMs: number
   /** Env layered over the credential-scrubbed parent env (config.env). */
   readonly env?: Record<string, string>
+  /** trusted 审批等级：spawn 加 --yolo，命令自动放行（除显式 deny）。 */
+  readonly yolo?: boolean
 }
 
 export type CreateCliRun = (options: CreateCliRunOptions) => Promise<CliRunHandle>
@@ -177,6 +179,7 @@ export const createCliRun: CreateCliRun = async (options) => {
     '-p',
     '--output-format', 'stream-json',
     '--trust',
+    ...(options.yolo === true ? ['--yolo'] : []),
     '--model', options.model,
     options.prompt,
   ]

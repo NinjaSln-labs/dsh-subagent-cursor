@@ -67,6 +67,7 @@ Default `driver: cli` requires a logged-in local `cursor-agent` CLI (`cursor-age
 | `timeoutMs` | `600000` | Hard wall-clock limit per run (ms, `driver: cli`) |
 | `disposeGraceMs` | `3000` | Positive grace (ms) for teardown waits |
 | `autoPermissions` | `true` | Provision/merge the Cursor CLI permission set on mount (create or append-only merge) |
+| `approvalLevel` | `balanced` | Approval posture: `balanced` (pop the auth window for denied commands, default) / `trusted` (spawn with `--yolo`, auto-approve, no popups) / `strict` (hard allowlist, no popups) |
 
 ## Why local one-shot
 

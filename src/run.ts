@@ -45,6 +45,8 @@ export type CursorRunDeps = {
   readonly configuredCwd?: string
   /** Extra env layered over the credential-scrubbed parent env. */
   readonly env?: Record<string, string>
+  /** Command-approval posture: 'trusted' spawns with --yolo (no popups). */
+  readonly approvalLevel?: 'balanced' | 'trusted' | 'strict'
   /**
    * Called when a cli result carries a permission-denied trace (a tool call
    * rejected by the Cursor allowlist). Receives the raw result text, any
@@ -244,6 +246,7 @@ export async function startCursorRun(
         cliPath: deps.cliPath,
         timeoutMs: deps.timeoutMs,
         env: deps.env,
+        yolo: deps.approvalLevel === 'trusted',
       })
       if (firstCliSessionId === '') firstCliSessionId = instance.sessionId
       activeCliRun = instance // 让 abort/cancel 能作用到当前运行
