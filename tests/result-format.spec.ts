@@ -22,7 +22,7 @@ describe('parseResultText', () => {
 })
 
 describe('formatForParent', () => {
-  it('puts summary first and wraps body in details', () => {
+  it('puts summary first and renders body as a markdown blockquote (no raw HTML)', () => {
     const text = formatForParent({
       summary: 'Patched auth',
       status: 'ok',
@@ -30,8 +30,17 @@ describe('formatForParent', () => {
       structured: true,
     })
     expect(text.startsWith('Patched auth [ok]')).toBe(true)
-    expect(text).toContain('<details>')
-    expect(text).toContain('Touched src/auth.ts')
+    expect(text).not.toContain('<details>')
+    expect(text).toContain('> Touched src/auth.ts')
+  })
+  it('handles multi-line bodies as blockquote lines', () => {
+    const text = formatForParent({
+      summary: 's',
+      status: 'ok',
+      body: 'line1\n\nline2',
+      structured: true,
+    })
+    expect(text).toContain('> line1\n>\n> line2')
   })
 })
 

@@ -41,17 +41,26 @@ export function parseResultText(text: string): ParsedResult {
 }
 
 /**
- * Parent-facing tool text: summary first; body marked as detail
- * (UI may fold the detail section). Optional `marker` prefixes the line so the
- * parent conversation can attribute the result to its source (e.g. Cursor).
+ * Parent-facing tool text: summary first; evidence body follows as a markdown
+ * blockquote (no raw HTML — the parent conversation and GUI render markdown,
+ * not `<details>` folding). Optional `marker` prefixes the line so the parent
+ * conversation can attribute the result to its source (e.g. Cursor).
  */
 export function formatForParent(parsed: ParsedResult, marker?: string): string {
   const status = parsed.status === 'unknown' ? '' : ` [${parsed.status}]`
   const detail = parsed.body.length === 0 || parsed.body === parsed.summary
     ? ''
-    : `\n\n<details>\n${parsed.body}\n</details>`
+    : `\n\n${quoteLines(parsed.body)}`
   const head = marker === undefined ? '' : `${marker}：`
   return `${head}${parsed.summary}${status}${detail}`
+}
+
+/** 每行前置 `> `，转成 markdown 引用块（空行保持结构）。 */
+function quoteLines(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (line.trim() === '' ? '>' : `> ${line}`))
+    .join('\n')
 }
 
 function firstLine(text: string): string {
