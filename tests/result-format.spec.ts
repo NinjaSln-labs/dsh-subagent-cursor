@@ -67,3 +67,17 @@ describe('formatForParent with marker', () => {
     expect(without.startsWith('Cursor 委派结果')).toBe(false)
   })
 })
+
+describe('formatForParent strips stray HTML', () => {
+  it('removes child-authored <details> wrappers', () => {
+    const out = formatForParent(parseResultText('<summary>ok</summary><body><details>\nCommands: git status\n</details></body>'), 'Cursor 委派结果')
+    expect(out).not.toContain('<details>')
+    expect(out).not.toContain('&lt;details&gt;')
+    expect(out).toContain('> Commands: git status')
+  })
+  it('removes HTML-escaped tags too', () => {
+    const out = formatForParent(parseResultText('<summary>s</summary><body>&lt;details&gt;x&lt;/details&gt;</body>'))
+    expect(out).not.toContain('details')
+    expect(out).toContain('> x')
+  })
+})

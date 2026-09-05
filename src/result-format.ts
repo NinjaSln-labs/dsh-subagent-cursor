@@ -40,6 +40,14 @@ export function parseResultText(text: string): ParsedResult {
   }
 }
 
+/** 剥离子代理输出中残留的 HTML 包裹标签（子代理偶尔会自创 `<details>` 等）。 */
+function stripHtmlTags(text: string): string {
+  return text
+    .replace(/<\/?(?:details|summary|body|status)[^>]*>/gi, '')
+    .replace(/&lt;\/?(?:details|summary|body|status)[^&]*&gt;/gi, '')
+    .trim()
+}
+
 /**
  * Parent-facing tool text: summary first; evidence body follows as a markdown
  * blockquote (no raw HTML — the parent conversation and GUI render markdown,
@@ -48,11 +56,13 @@ export function parseResultText(text: string): ParsedResult {
  */
 export function formatForParent(parsed: ParsedResult, marker?: string): string {
   const status = parsed.status === 'unknown' ? '' : ` [${parsed.status}]`
-  const detail = parsed.body.length === 0 || parsed.body === parsed.summary
+  const cleanedSummary = stripHtmlTags(parsed.summary)
+  const cleanedBody = stripHtmlTags(parsed.body)
+  const detail = cleanedBody.length === 0 || cleanedBody === cleanedSummary
     ? ''
-    : `\n\n${quoteLines(parsed.body)}`
+    : `\n\n${quoteLines(cleanedBody)}`
   const head = marker === undefined ? '' : `${marker}：`
-  return `${head}${parsed.summary}${status}${detail}`
+  return `${head}${cleanedSummary}${status}${detail}`
 }
 
 /** 每行前置 `> `，转成 markdown 引用块（空行保持结构）。 */
