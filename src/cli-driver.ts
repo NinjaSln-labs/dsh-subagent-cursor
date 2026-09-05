@@ -30,7 +30,7 @@ export type CliRunHandle = {
 }
 
 export type CliResult =
-  | { readonly kind: 'finished'; readonly text: string; readonly sessionId: string }
+  | { readonly kind: 'finished'; readonly text: string; readonly sessionId: string; readonly rejected?: readonly string[] }
   | { readonly kind: 'error'; readonly category: FailureCategory; readonly detail: string; readonly sessionId?: string }
 
 export type CreateCliRunOptions = {
@@ -59,6 +59,21 @@ export function parseCliEventLine(line: string): CliStreamEvent | undefined {
     // non-JSON line (progress noise) — ignore
   }
   return undefined
+}
+
+/** Extract a shell command rejected by the Cursor permission allowlist. */
+export function extractRejectedCommand(event: CliStreamEvent): string | undefined {
+  if (event.type !== 'tool_call' || event.subtype !== 'completed') return undefined
+  const tc = (event as { tool_call?: unknown }).tool_call
+  if (tc === null || typeof tc !== 'object') return undefined
+  const shell = (tc as { shellToolCall?: unknown }).shellToolCall
+  if (shell === null || typeof shell !== 'object') return undefined
+  const result = (shell as { result?: unknown }).result
+  if (result === null || typeof result !== 'object') return undefined
+  const rejected = (result as { rejected?: unknown }).rejected
+  if (rejected === null || typeof rejected !== 'object') return undefined
+  const command = (rejected as { command?: unknown }).command
+  return typeof command === 'string' && command.trim().length > 0 ? command.trim() : undefined
 }
 
 function classifyCliFailure(detail: string): FailureCategory {
@@ -176,6 +191,7 @@ export const createCliRun: CreateCliRun = async (options) => {
   let settled = false
   let cancelRequested = false
   let sessionId = ''
+  const rejectedCommands: string[] = []
   let resolveWait!: (value: CliResult) => void
   const waitPromise = new Promise<CliResult>((resolve) => { resolveWait = resolve })
 
@@ -204,6 +220,10 @@ export const createCliRun: CreateCliRun = async (options) => {
         if (typeof event.session_id === 'string' && event.session_id.length > 0) {
           sessionId = event.session_id
         }
+        const rejectedCmd = extractRejectedCommand(event)
+        if (rejectedCmd !== undefined && !rejectedCommands.includes(rejectedCmd)) {
+          rejectedCommands.push(rejectedCmd)
+        }
         if (event.type === 'result') {
           if (event.is_error === true) {
             settle({
@@ -213,7 +233,12 @@ export const createCliRun: CreateCliRun = async (options) => {
               sessionId,
             })
           } else {
-            settle({ kind: 'finished', text: event.result ?? '', sessionId })
+            settle({
+              kind: 'finished',
+              text: event.result ?? '',
+              sessionId,
+              rejected: rejectedCommands.length > 0 ? [...rejectedCommands] : undefined,
+            })
           }
         }
       }

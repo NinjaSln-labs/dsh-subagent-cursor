@@ -43,13 +43,13 @@ export type CursorRunDeps = {
   /** Extra env layered over the credential-scrubbed parent env. */
   readonly env?: Record<string, string>
   /**
-   * Called when a cli result carries a permission-denied trace (e.g. a tool
-   * call that was rejected by the Cursor allowlist). Receives the raw result
-   * text and returns text to show instead — typically prompts the user for an
-   * authorization decision via the host answerer, grants the permission, and
-   * tells the caller to retry. Absent → the raw (blocked) text is shown.
+   * Called when a cli result carries a permission-denied trace (a tool call
+   * rejected by the Cursor allowlist). Receives the raw result text plus any
+   * rejected commands extracted from the stream, and returns text to show
+   * instead — typically prompts the user via the host answerer, grants the
+   * permission, and tells the caller to retry. Absent → the raw text is shown.
    */
-  readonly onBlocked?: (blockedText: string) => Promise<string>
+  readonly onBlocked?: (blockedText: string, rejected?: readonly string[]) => Promise<string>
   readonly onError?: (error: Error, stopReason: SubagentStopReason) => void
 }
 
@@ -246,14 +246,14 @@ export async function startCursorRun(
       attempt: async () => {
         const cliResult = await cliRun.wait()
         const mapped = mapCliResult(cliResult)
-        // 权限被拒 → 授权桥（若配置）介入：弹窗征询并可能加白名单
-        if (
-          mapped.stopReason === 'completed'
-          && cliResult.kind === 'finished'
-          && deps.onBlocked !== undefined
-          && looksBlocked(cliResult.text)
-        ) {
-          const replacement = await deps.onBlocked(formatForParent(parseResultText(cliResult.text), 'Cursor 委派结果'))
+        // 权限被拒（结构化 rejected 信号优先，文本启发兜底）→ 授权桥（若配置）介入
+        const hasRejection = cliResult.kind === 'finished'
+          && ((cliResult.rejected?.length ?? 0) > 0 || looksBlocked(cliResult.text))
+        if (mapped.stopReason === 'completed' && hasRejection && deps.onBlocked !== undefined) {
+          const replacement = await deps.onBlocked(
+            formatForParent(parseResultText(cliResult.text), 'Cursor 委派结果'),
+            cliResult.kind === 'finished' ? cliResult.rejected : undefined,
+          )
           return { output: textOutput(replacement), stopReason: 'completed' as const }
         }
         return mapped

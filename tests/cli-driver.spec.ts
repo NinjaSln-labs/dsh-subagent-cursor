@@ -82,3 +82,31 @@ describe('checkCliReady', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 })
+
+describe('extractRejectedCommand', () => {
+  it('extracts rejected shell command from tool_call completed event', async () => {
+    const { extractRejectedCommand } = await import('../src/cli-driver.ts')
+    const event = {
+      type: 'tool_call',
+      subtype: 'completed',
+      tool_call: {
+        shellToolCall: {
+          result: { rejected: { command: 'whoami', workingDirectory: '/tmp', isReadonly: false } },
+        },
+      },
+    }
+    expect(extractRejectedCommand(event as never)).toBe('whoami')
+  })
+  it('returns undefined for non-rejected or non-shell events', async () => {
+    const { extractRejectedCommand } = await import('../src/cli-driver.ts')
+    expect(extractRejectedCommand({ type: 'result', subtype: 'success' } as never)).toBeUndefined()
+    expect(extractRejectedCommand({
+      type: 'tool_call', subtype: 'completed',
+      tool_call: { readToolCall: { result: { success: {} } } },
+    } as never)).toBeUndefined()
+    expect(extractRejectedCommand({
+      type: 'tool_call', subtype: 'completed',
+      tool_call: { shellToolCall: { result: { success: { linesCreated: 1 } } } },
+    } as never)).toBeUndefined()
+  })
+})
