@@ -28,7 +28,8 @@ concurrency:
   group: npm-publish
   cancel-in-progress: false
 
-jobs:  publish:
+jobs:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
