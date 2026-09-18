@@ -26,3 +26,4 @@ HANDOFF-ARCHIVE/
 # 测试产物（基线入库，结果不入）
 test-results/
 visual/results/
+audit-report/
