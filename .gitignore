@@ -27,3 +27,5 @@ HANDOFF-ARCHIVE/
 test-results/
 visual/results/
 audit-report/
+# 本机 skill-fit 体检产物
+.skill-fit/
